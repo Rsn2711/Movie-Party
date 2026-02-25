@@ -36,9 +36,12 @@ app.get(/^(?!\/health|\/socket-health|\/socket\.io)/, (req, res) => {
 const io = new Server(server, {
   // Production-ready CORS configuration for Railway deployment
   cors: {
-    origin: process.env.NODE_ENV === 'production'
-      ? (process.env.FRONTEND_URL || "*")
-      : ["http://localhost:3000", "http://192.168.240.1:3000", "*"],
+    origin: [
+  "https://movie-party-bice.vercel.app",
+  "https://movie-party-git-main-kumarraushan2797-6902s-projects.vercel.app",
+  "https://movie-party-5srathvcm-kumarraushan2797-6902s-projects.vercel.app",
+  "http://localhost:3000"
+],
     methods: ["GET", "POST"],
     credentials: true
   },
