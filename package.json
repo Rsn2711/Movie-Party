@@ -5,8 +5,8 @@
   "scripts": {
     "start": "node backend/server.js",
     "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\"",
-    "dev:backend": "cd backend && node server.js",
-    "dev:frontend": "cd frontend && npm start"
+    "dev:backend": "npm start --prefix backend",
+    "dev:frontend": "npm start --prefix frontend"
   },
   "dependencies": {
     "express": "^4.18.2",

@@ -6,23 +6,37 @@ const path = require("path");
 const app = express();
 const server = http.createServer(app);
 
-// Serve static files from the frontend build directory
-app.use(express.static(path.join(__dirname, '../frontend/build')));
+const fs = require("fs");
+
+// Serve static files from the frontend build directory if it exists
+const buildPath = path.join(__dirname, '../frontend/build');
+if (fs.existsSync(buildPath)) {
+  app.use(express.static(buildPath));
+}
 
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', message: 'Server is running' });
 });
 
-// Serve the frontend for all other routes (excluding API and socket routes)
+// Serve the frontend for all other routes
 app.get(/^(?!\/health|\/socket-health|\/socket\.io)/, (req, res) => {
-  res.sendFile(path.join(__dirname, '../frontend/build/index.html'));
+  if (fs.existsSync(path.join(buildPath, 'index.html'))) {
+    res.sendFile(path.join(buildPath, 'index.html'));
+  } else {
+    res.status(404).send(`
+      <h1>Frontend Build Not Found</h1>
+      <p>The backend is running on port ${process.env.PORT || 5000}, but the frontend build directory was not found.</p>
+      <p>If you are developing locally, please use the frontend development server at <strong>http://localhost:3000</strong>.</p>
+      <p>To run the production build, run <code>npm run build</code> in the frontend directory first.</p>
+    `);
+  }
 });
 
 const io = new Server(server, {
   // Production-ready CORS configuration for Railway deployment
-  cors: { 
-    origin: process.env.NODE_ENV === 'production' 
+  cors: {
+    origin: process.env.NODE_ENV === 'production'
       ? (process.env.FRONTEND_URL || "*")
       : ["http://localhost:3000", "http://192.168.240.1:3000", "*"],
     methods: ["GET", "POST"],
@@ -32,7 +46,7 @@ const io = new Server(server, {
   transports: ['websocket', 'polling'],
   allowEIO3: true, // Allow older Engine.IO versions
   cookie: false,   // Disable cookies for Railway compatibility
-  
+
   // Railway-specific settings for WebSocket upgrades
   pingTimeout: 60000,
   pingInterval: 25000,
@@ -41,7 +55,7 @@ const io = new Server(server, {
   path: '/socket.io/',
   serveClient: false,  // Don't serve client-side library
   maxHttpBufferSize: 1e6, // 1MB for larger payloads
-  
+
   // Additional settings for Railway's infrastructure
   perMessageDeflate: false, // Disable compression to avoid proxy issues
   httpCompression: false    // Disable HTTP compression for WebSocket compatibility
@@ -75,10 +89,10 @@ io.on("connect_error", (err) => {
 
 // Additional health check for Railway
 app.get('/socket-health', (req, res) => {
-  res.status(200).json({ 
-    status: 'OK', 
+  res.status(200).json({
+    status: 'OK',
     message: 'Socket.IO server is running',
-    connectedSockets: io.engine.clientsCount 
+    connectedSockets: io.engine.clientsCount
   });
 });
 
@@ -113,17 +127,17 @@ io.on("connection", (socket) => {
     if (!roomId) return;
     const cleanRoomId = roomId.trim().toUpperCase();
     console.log(`[JOIN] User: ${username} -> Room: ${cleanRoomId}`);
-    
+
     socket.join(cleanRoomId);
     if (!rooms[cleanRoomId]) rooms[cleanRoomId] = { streamer: null };
-    
+
     // Notify room
     io.to(cleanRoomId).emit("user-joined", username);
-    
+
     // Direct reply to joiner
-    socket.emit("stream-status", { 
+    socket.emit("stream-status", {
       isStreaming: !!rooms[cleanRoomId].streamer,
-      streamerId: rooms[cleanRoomId].streamer 
+      streamerId: rooms[cleanRoomId].streamer
     });
   });
 
@@ -242,7 +256,6 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, "0.0.0.0", () => {
   console.log(`Backend running on port ${PORT}`);
   console.log(`Server listening on 0.0.0.0:${PORT}`);
-  console.log(`Process environment:`, process.env);
 });
 
 // Graceful shutdown
