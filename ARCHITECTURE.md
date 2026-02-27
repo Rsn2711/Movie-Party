@@ -153,26 +153,72 @@ For **screen share**, `getDisplayMedia({ audio: true })` already returns a Media
 
 ## STUN / TURN Configuration
 
-### STUN (Free — for most networks)
-The app uses Google's free STUN servers:
-- `stun:stun.l.google.com:19302`
-- `stun:stun1.l.google.com:19302`
-- `stun:stun2.l.google.com:19302`
+### STUN (Free — for most home networks)
+```
+stun:stun.l.google.com:19302
+stun:stun1.l.google.com:19302
+stun:stun2.l.google.com:19302
+```
+STUN works when at least one peer is behind a "cone" NAT (most home ISPs).
+**STUN fails** when either peer is behind **symmetric NAT** (mobile, corporate, strict ISPs).
 
-These handle ~85% of connections (residential/mobile NAT).
+### TURN (Built-in free server for testing)
+The code includes `openrelay.metered.ca` TURN servers as a built-in fallback.
+These work for testing — for production replace with your own TURN server.
 
-### TURN (Required for corporate / symmetric NAT)
-Set these environment variables in `frontend/.env.local` or `frontend/.env.production`:
-
+### Your own TURN server (recommended for production)
+Set these in `frontend/.env.local` or `frontend/.env.production`:
 ```bash
-REACT_APP_TURN_URL=turn:your-turn-server.com:3478
+REACT_APP_TURN_URL=turn:your-server.com:3478
 REACT_APP_TURN_USERNAME=your_username
 REACT_APP_TURN_CREDENTIAL=your_password
 ```
 
-**Free TURN options**:
-- [Metered.ca](https://www.metered.ca/) — 50 GB/month free
-- [Twilio STUN/TURN](https://www.twilio.com/docs/stun-turn) — pay-as-you-go
+**Free TURN providers**:
+- [Metered.ca](https://www.metered.ca/) — 50 GB/month free tier
+- [Twilio](https://www.twilio.com/docs/stun-turn) — pay-as-you-go
+
+---
+
+## Why WebRTC Failed on Vercel + Render (Root Cause Analysis)
+
+### Reason 1 — Double-offer race condition (Code Bug)
+```
+handleRequestStream() → manually called pc.createOffer()
+addLocalTracks()      → triggered onnegotiationneeded → also called pc.createOffer()
+
+Result: Two simultaneous offers → signaling state machine error → ICE never starts
+```
+**Fix**: Removed `onnegotiationneeded`. All offers are created **explicitly** in `sendOffer()`.
+
+### Reason 2 — No TURN server (NAT traversal gap)
+```
+Locally:    Host + Viewer = same machine → loopback → no NAT → STUN works
+Production: Host = home WiFi behind NAT A
+            Viewer = mobile/corporate behind NAT B (possibly symmetric)
+            → STUN cannot punch through symmetric NAT → ICE fails
+```
+**Fix**: Built-in TURN server (`openrelay.metered.ca`) provides relay fallback.
+
+### Reason 3 — captureStream() on un-started video
+```
+Old code: captureStream() called immediately after play() (before first frame decoded)
+Result:   Stream has 0 tracks → addTrack() adds nothing → viewer receives nothing
+```
+**Fix**: 200ms delay after `play()` before calling `captureStream()`.
+
+### Debugging ICE failures (open browser DevTools → Console)
+The new code logs every step with colors:
+```
+[ICE] Connection state → checking   (orange)  ← negotiating
+[ICE] Connection state → connected  (green)   ← success
+[ICE] Connection state → failed     (red)     ← need TURN server
+[ICE] Sending candidate to X: relay udp       ← TURN relay candidate
+[ICE] Sending candidate to X: srflx udp       ← STUN server-reflexive candidate
+[ICE] Sending candidate to X: host  udp       ← local network candidate
+```
+If you only see `host` candidates and ICE fails → **TURN server required**.
+If you see `relay` candidates and ICE still fails → check TURN credentials.
 
 ---
 
@@ -183,10 +229,11 @@ REACT_APP_TURN_CREDENTIAL=your_password
                     │   Vercel (React Frontend)    │
                     │   movie-party-bice.vercel.app│
                     └──────────────┬──────────────┘
-                                   │ Socket.IO
+                                   │ Socket.IO (signaling only)
                     ┌──────────────▼──────────────┐
                     │   Render (Node.js Backend)   │
-                    │   Signaling only, no media   │
+                    │   Carries: SDP + ICE only    │
+                    │   Does NOT carry media       │
                     └─────────────────────────────┘
                               ▲           ▲
                    ICE/SDP    │           │   ICE/SDP
@@ -196,11 +243,9 @@ REACT_APP_TURN_CREDENTIAL=your_password
     │   Host Browser     │              │   Viewer Browser     │
     │   (Chrome/Edge)    │◄────P2P─────►│   (Chrome/Edge)      │
     └────────────────────┘   WebRTC     └──────────────────────┘
-             ↑
-    Google STUN / TURN server (for NAT traversal)
+             ↑                   if symmetric NAT:   ↓
+             └──── TURN server (openrelay.metered.ca) ──────┘
 ```
-
-**Key point**: After signaling, all video/audio flows **directly peer-to-peer** — the Render server carries zero media traffic.
 
 ---
 
@@ -211,8 +256,6 @@ REACT_APP_TURN_CREDENTIAL=your_password
 | 1–8   | Full mesh (this implementation) | Each peer connects to every other peer |
 | 8–50  | SFU (Selective Forwarding Unit) | MediaSoup, LiveKit, or Janus |
 | 50+   | CDN streaming (HLS/DASH) | Host stream → CDN → viewers |
-
-For a watch party, 8 simultaneous viewers is a reasonable practical limit before switching to an SFU. The `useWebRTC` hook's design is intentionally structured to make upgrading to an SFU straightforward — just swap what `remoteStream` is set from.
 
 ---
 
@@ -225,4 +268,5 @@ For a watch party, 8 simultaneous viewers is a reasonable practical limit before
 | `getDisplayMedia` | ✅ | ✅ | ✅ | ✅ (macOS 13+) |
 | `playbackRate` adjust | ✅ | ✅ | ✅ | ✅ |
 
-> **Safari host note**: `captureStream()` is not supported on Safari. Safari users can still join as viewers or use screen share. A canvas-based fallback could be added for file hosting on Safari if needed.
+> **Safari host note**: `captureStream()` is not supported on Safari. Safari users can join as viewers or use screen share. The code falls back to `mozCaptureStream()` on Firefox automatically.
+

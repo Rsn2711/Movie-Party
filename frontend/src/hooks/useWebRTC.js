@@ -1,26 +1,67 @@
 /**
- * useWebRTC.js
+ * useWebRTC.js  — Production-grade WebRTC hook
  *
- * Encapsulates all RTCPeerConnection logic for the Movie Watch Party.
+ * ROOT CAUSES of the "Sync Only / WebRTC failed" on Vercel + Render:
+ *
+ *  BUG 1 — Double-offer race:
+ *    In handleRequestStream the code manually called pc.createOffer() AND
+ *    pc.onnegotiationneeded also fired (because addTrack triggers it).
+ *    Two simultaneous offers → signaling state machine error → connection dies.
+ *    FIX: Remove onnegotiationneeded entirely. All offers are created EXPLICITLY
+ *    only in handleRequestStream and handleUserJoined.
+ *
+ *  BUG 2 — No TURN server:
+ *    Locally both peers share the same machine → no NAT → STUN succeeds trivially.
+ *    On Vercel + Render the viewer and host are on different networks behind NAT.
+ *    If either side is behind symmetric NAT (common on mobile/corporate), STUN
+ *    can't punch through → ICE fails → "failed" state.
+ *    FIX: Add a free TURN server (openrelay.metered.ca) as built-in fallback.
+ *    Users can override with their own TURN via env vars.
+ *
+ *  BUG 3 — handleUserJoined relied on onnegotiationneeded firing asynchronously
+ *    but that was never guaranteed (esp. with the removed onnegotiationneeded handler).
+ *    FIX: Explicitly create offer and send it in handleUserJoined, same as
+ *    handleRequestStream.
  *
  * Architecture:
- *  - Full-mesh topology: host creates one RTCPeerConnection per viewer.
- *  - Uses the "perfect negotiation" pattern to handle offer/answer glare.
- *  - ICE candidates are queued until setRemoteDescription is complete.
- *  - Falls back to Socket.io-only sync if WebRTC fails after 15 s.
- *
- * Usage:
- *   const { startStream, stopStream, remoteStream, peerStates } = useWebRTC({ roomId, socket });
+ *  - EXPLICIT negotiation only (no onnegotiationneeded)
+ *  - Host is always offerer, viewer is always answerer
+ *  - ICE candidates buffered until after setRemoteDescription
+ *  - TURN servers included for NAT traversal in production
+ *  - Full ICE state logging for debugging
  */
 
 import { useRef, useState, useEffect, useCallback } from "react";
 
+// ─── ICE Configuration ────────────────────────────────────────────────────────
+// Free TURN servers: openrelay.metered.ca (no sign-up needed, testing only)
+// Replace with your own TURN server for production to avoid rate limits.
+// Metered.ca free tier: https://www.metered.ca/tools/openrelay/
 const ICE_CONFIG = {
     iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
         { urls: "stun:stun2.l.google.com:19302" },
-        // TURN server — read from env vars (set in .env.local / .env.production)
+
+        // ── Free TURN for testing (openrelay.metered.ca) ──
+        // These allow NAT traversal when STUN alone fails (production deployments)
+        {
+            urls: "turn:openrelay.metered.ca:80",
+            username: "openrelayproject",
+            credential: "openrelayproject",
+        },
+        {
+            urls: "turn:openrelay.metered.ca:443",
+            username: "openrelayproject",
+            credential: "openrelayproject",
+        },
+        {
+            urls: "turn:openrelay.metered.ca:443?transport=tcp",
+            username: "openrelayproject",
+            credential: "openrelayproject",
+        },
+
+        // ── Your own TURN (override via env vars for production) ──
         ...(process.env.REACT_APP_TURN_URL
             ? [
                 {
@@ -36,28 +77,19 @@ const ICE_CONFIG = {
     rtcpMuxPolicy: "require",
 };
 
+// ─── Hook ─────────────────────────────────────────────────────────────────────
 export function useWebRTC({ roomId, socket }) {
-    // peerConnections[peerId] = RTCPeerConnection
-    const pcs = useRef({});
-    // iceCandidateQueue[peerId] = RTCIceCandidateInit[]  — buffered before remoteDesc set
-    const iceCandidateQueue = useRef({});
-    // remoteDescSet[peerId] = boolean
-    const remoteDescSet = useRef({});
-    // localStream cached ref
+    const pcs = useRef({});                  // { peerId: RTCPeerConnection }
+    const iceCandidateQueue = useRef({});    // { peerId: RTCIceCandidateInit[] }
+    const remoteDescSet = useRef({});        // { peerId: boolean }
     const localStreamRef = useRef(null);
-    // Fallback timer ref (connection watchdog)
-    const fallbackTimer = useRef(null);
+    const makingOfferRef = useRef({});       // { peerId: boolean } — glare guard
 
     const [remoteStream, setRemoteStream] = useState(null);
-    const [peerStates, setPeerStates] = useState({}); // { peerId: "connecting"|"connected"|"failed" }
+    const [peerStates, setPeerStates] = useState({});
     const [usingFallback, setUsingFallback] = useState(false);
 
-    const getCleanRoomId = useCallback(
-        () => (roomId ? roomId.trim().toUpperCase() : ""),
-        [roomId]
-    );
-
-    // ── ICE candidate queue helpers ─────────────────────────────────────────
+    // ── ICE helper: queue until remote description is set ──────────────────────
     const queueIceCandidate = useCallback((peerId, candidate) => {
         if (!iceCandidateQueue.current[peerId]) {
             iceCandidateQueue.current[peerId] = [];
@@ -70,232 +102,314 @@ export function useWebRTC({ roomId, socket }) {
         if (!pc) return;
         const queue = iceCandidateQueue.current[peerId] || [];
         iceCandidateQueue.current[peerId] = [];
+        console.log(`[WebRTC] Flushing ${queue.length} buffered ICE candidates for ${peerId}`);
         for (const candidate of queue) {
             try {
                 await pc.addIceCandidate(new RTCIceCandidate(candidate));
             } catch (err) {
-                // ignore state-machine errors from stale candidates
+                // Benign — can happen if candidate is redundant or connection closed
             }
         }
     }, []);
 
-    // ── Create peer connection ───────────────────────────────────────────────
+    // ── Create RTCPeerConnection ───────────────────────────────────────────────
     const createPeerConnection = useCallback(
-        (peerId, isPolite) => {
-            // Close & remove any existing connection
+        (peerId) => {
+            // Close any stale connection first
             if (pcs.current[peerId]) {
+                console.log(`[WebRTC] Closing stale PC for ${peerId}`);
                 pcs.current[peerId].close();
                 delete pcs.current[peerId];
             }
             remoteDescSet.current[peerId] = false;
             iceCandidateQueue.current[peerId] = [];
+            makingOfferRef.current[peerId] = false;
 
+            console.log(`[WebRTC] Creating RTCPeerConnection for ${peerId}`);
             const pc = new RTCPeerConnection(ICE_CONFIG);
             pcs.current[peerId] = pc;
 
-            // ── ICE candidates ────────────────────────────────────────────────
+            // ── ICE candidate handler ─────────────────────────────────────────────
             pc.onicecandidate = ({ candidate }) => {
                 if (candidate) {
+                    console.log(`[ICE] Sending candidate to ${peerId}: ${candidate.type} ${candidate.protocol}`);
                     socket.emit("webrtc-ice-candidate", { to: peerId, candidate });
+                } else {
+                    console.log(`[ICE] Gathering complete for ${peerId}`);
                 }
             };
 
+            pc.onicegatheringstatechange = () => {
+                console.log(`[ICE] Gathering state → ${pc.iceGatheringState} (peer: ${peerId})`);
+            };
+
+            // ── ICE connection state — critical for debugging ────────────────────
             pc.oniceconnectionstatechange = () => {
-                console.log(`[WebRTC] ICE ${peerId}: ${pc.iceConnectionState}`);
-                const state =
-                    pc.iceConnectionState === "connected" ||
-                        pc.iceConnectionState === "completed"
-                        ? "connected"
-                        : pc.iceConnectionState === "failed" ||
-                            pc.iceConnectionState === "disconnected"
-                            ? "failed"
+                const s = pc.iceConnectionState;
+                console.log(`%c[ICE] Connection state → ${s} (peer: ${peerId})`,
+                    s === "connected" || s === "completed" ? "color:green;font-weight:bold"
+                        : s === "failed" ? "color:red;font-weight:bold"
+                            : "color:orange");
+
+                const normalized =
+                    s === "connected" || s === "completed" ? "connected"
+                        : s === "failed" || s === "disconnected" ? "failed"
                             : "connecting";
 
-                setPeerStates((prev) => ({ ...prev, [peerId]: state }));
+                setPeerStates((prev) => ({ ...prev, [peerId]: normalized }));
 
-                if (state === "failed") {
-                    console.warn(`[WebRTC] Connection to ${peerId} failed — activating fallback`);
+                if (s === "failed") {
+                    console.error(
+                        `[ICE] FAILED for ${peerId}.\n` +
+                        "Possible causes:\n" +
+                        "  1. No TURN server reached (symmetric NAT)\n" +
+                        "  2. Firewall blocking UDP ports\n" +
+                        "  3. ICE candidates dropped before setRemoteDescription\n" +
+                        "Activating Socket.io-only fallback sync."
+                    );
                     setUsingFallback(true);
                 }
-            };
 
-            // ── Receiving remote tracks (viewer side) ─────────────────────────
-            pc.ontrack = ({ streams }) => {
-                console.log(`[WebRTC] ontrack from ${peerId}`);
-                if (streams && streams[0]) {
-                    setRemoteStream((prev) => {
-                        // Only update if the stream object actually changed
-                        if (prev && prev.id === streams[0].id) return prev;
-                        return streams[0];
-                    });
+                if (s === "disconnected") {
+                    // Try ICE restart before giving up
+                    console.warn(`[ICE] Disconnected — attempting restart for ${peerId}`);
+                    if (localStreamRef.current && pc.restartIce) {
+                        pc.restartIce();
+                    }
                 }
             };
 
-            // ── Perfect negotiation: polite peer handles glare ─────────────────
-            let makingOffer = false;
-            pc.onnegotiationneeded = async () => {
-                if (isPolite) return; // polite peer never initiates
-                try {
-                    makingOffer = true;
-                    await pc.setLocalDescription();
-                    socket.emit("webrtc-offer", { to: peerId, offer: pc.localDescription });
-                } catch (err) {
-                    console.error("[WebRTC] negotiationneeded error:", err);
-                } finally {
-                    makingOffer = false;
-                }
+            pc.onsignalingstatechange = () => {
+                console.log(`[SIG] Signaling state → ${pc.signalingState} (peer: ${peerId})`);
             };
 
-            // Store makingOffer ref on the pc for use in offer handler
-            pc._makingOffer = () => makingOffer;
-            pc._isPolite = isPolite;
+            pc.onconnectionstatechange = () => {
+                console.log(`[PC] Connection state → ${pc.connectionState} (peer: ${peerId})`);
+            };
+
+            // ── Receive tracks from remote peer (viewer side) ─────────────────────
+            pc.ontrack = ({ track, streams }) => {
+                console.log(`[WebRTC] ontrack: kind=${track.kind} from ${peerId}`, streams);
+                if (!streams || streams.length === 0) {
+                    console.warn("[WebRTC] ontrack fired with no streams — track without stream");
+                    return;
+                }
+                const incomingStream = streams[0];
+                setRemoteStream((prev) => {
+                    if (prev && prev.id === incomingStream.id) return prev; // no-op if same
+                    console.log(`[WebRTC] Assigning remote stream ${incomingStream.id}`);
+                    return incomingStream;
+                });
+            };
+
+            // IMPORTANT: Do NOT set onnegotiationneeded here.
+            // It was causing a race condition where both the automatic negotiation
+            // and our manual createOffer() ran simultaneously → signaling glare → failure.
+            // All offers are initiated EXPLICITLY below.
 
             return pc;
         },
         [socket]
     );
 
-    // ── Add local tracks to a peer connection ───────────────────────────────
-    const addLocalTracksToPeer = useCallback((pc) => {
+    // ── Helper: add all local tracks to a peer connection ─────────────────────
+    const addLocalTracks = useCallback((pc) => {
         const stream = localStreamRef.current;
         if (!stream) return;
-        const senders = pc.getSenders().map((s) => s.track?.id);
+        const existingSenderTrackIds = pc.getSenders()
+            .map((s) => s.track?.id)
+            .filter(Boolean);
+
         stream.getTracks().forEach((track) => {
-            if (!senders.includes(track.id)) {
+            if (!existingSenderTrackIds.includes(track.id)) {
+                console.log(`[WebRTC] Adding track: ${track.kind} (${track.id})`);
                 pc.addTrack(track, stream);
             }
         });
     }, []);
 
-    // ── Public: start streaming (host calls this) ───────────────────────────
-    const startStream = useCallback(
-        (stream) => {
-            localStreamRef.current = stream;
-            // Add tracks to all existing peer connections immediately
-            Object.values(pcs.current).forEach((pc) => addLocalTracksToPeer(pc));
+    // ── Helper: explicitly create and send offer (HOST only) ──────────────────
+    const sendOffer = useCallback(
+        async (peerId) => {
+            const pc = pcs.current[peerId];
+            if (!pc) return;
+            if (makingOfferRef.current[peerId]) {
+                console.warn(`[WebRTC] Already making offer for ${peerId}, skipping`);
+                return;
+            }
+            try {
+                makingOfferRef.current[peerId] = true;
+                console.log(`[WebRTC] Creating offer for ${peerId}`);
+                const offer = await pc.createOffer({
+                    offerToReceiveAudio: false,  // host sends only, not receives
+                    offerToReceiveVideo: false,
+                });
+                await pc.setLocalDescription(offer);
+                console.log(`[WebRTC] Sending offer to ${peerId}`);
+                socket.emit("webrtc-offer", { to: peerId, offer: pc.localDescription });
+            } catch (err) {
+                console.error(`[WebRTC] Failed to create offer for ${peerId}:`, err);
+            } finally {
+                makingOfferRef.current[peerId] = false;
+            }
         },
-        [addLocalTracksToPeer]
+        [socket]
     );
 
-    // ── Public: stop streaming ──────────────────────────────────────────────
+    // ── Public: host calls this when stream is ready ───────────────────────────
+    const startStream = useCallback(
+        (stream) => {
+            console.log("[WebRTC] startStream — storing local stream");
+            localStreamRef.current = stream;
+            // If any peer connections already exist (rare edge case), add tracks
+            Object.entries(pcs.current).forEach(([peerId, pc]) => {
+                addLocalTracks(pc);
+                sendOffer(peerId);
+            });
+        },
+        [addLocalTracks, sendOffer]
+    );
+
+    // ── Public: stop all peer connections ─────────────────────────────────────
     const stopStream = useCallback(() => {
+        console.log("[WebRTC] stopStream — closing all connections");
         Object.values(pcs.current).forEach((pc) => pc.close());
         pcs.current = {};
         iceCandidateQueue.current = {};
         remoteDescSet.current = {};
+        makingOfferRef.current = {};
         localStreamRef.current = null;
         setRemoteStream(null);
         setPeerStates({});
         setUsingFallback(false);
-        if (fallbackTimer.current) clearTimeout(fallbackTimer.current);
     }, []);
 
-    // ── Socket signal handlers ───────────────────────────────────────────────
+    // ── Socket event handlers ─────────────────────────────────────────────────
     useEffect(() => {
         if (!socket || !roomId) return;
 
-        // ── Host: viewer requests stream ────────────────────────────────────
+        // HOST receives: viewer is requesting the stream
         const handleRequestStream = async ({ from }) => {
-            console.log(`[WebRTC] request-stream from ${from}`);
-            if (!localStreamRef.current) return;
+            console.log(`[WebRTC] ← request-stream from viewer ${from}`);
 
-            const pc = createPeerConnection(from, false); // host = impolite
-            addLocalTracksToPeer(pc);
-
-            try {
-                const offer = await pc.createOffer();
-                await pc.setLocalDescription(offer);
-                socket.emit("webrtc-offer", { to: from, offer: pc.localDescription });
-            } catch (err) {
-                console.error("[WebRTC] Error creating offer:", err);
-            }
-        };
-
-        // ── Viewer: receive offer from host ─────────────────────────────────
-        const handleOffer = async ({ offer, from }) => {
-            console.log(`[WebRTC] offer from ${from}`);
-
-            let pc = pcs.current[from];
-            if (!pc) {
-                pc = createPeerConnection(from, true); // viewer = polite
-            }
-
-            const offerCollision =
-                pc.signalingState !== "stable" || pc._makingOffer();
-
-            if (offerCollision && !pc._isPolite) {
-                console.warn("[WebRTC] Glare detected — impolite peer ignoring offer");
+            if (!localStreamRef.current) {
+                console.warn("[WebRTC] request-stream received but no local stream — ignoring");
                 return;
             }
+
+            const pc = createPeerConnection(from);
+            addLocalTracks(pc);
+            // Brief delay so addTrack settles before negotiation
+            await new Promise((r) => setTimeout(r, 50));
+            await sendOffer(from);
+        };
+
+        // VIEWER receives: host sent an offer
+        const handleOffer = async ({ offer, from }) => {
+            console.log(`[WebRTC] ← offer from host ${from}`);
+
+            // Create/recreate PC for this host
+            const pc = createPeerConnection(from);
 
             try {
                 await pc.setRemoteDescription(new RTCSessionDescription(offer));
                 remoteDescSet.current[from] = true;
+                console.log(`[WebRTC] Remote description set for ${from}`);
+
+                // Flush any ICE candidates that arrived early
                 await flushIceCandidates(from);
 
                 const answer = await pc.createAnswer();
                 await pc.setLocalDescription(answer);
+                console.log(`[WebRTC] Sending answer to ${from}`);
                 socket.emit("webrtc-answer", { to: from, answer: pc.localDescription });
             } catch (err) {
-                console.error("[WebRTC] Error handling offer:", err);
+                console.error(`[WebRTC] Failed to handle offer from ${from}:`, err);
             }
         };
 
-        // ── Host: receive answer from viewer ────────────────────────────────
+        // HOST receives: viewer sent an answer
         const handleAnswer = async ({ answer, from }) => {
-            console.log(`[WebRTC] answer from ${from}`);
+            console.log(`[WebRTC] ← answer from viewer ${from}`);
             const pc = pcs.current[from];
-            if (!pc) return;
+            if (!pc) {
+                console.warn(`[WebRTC] No PC found for ${from} when handling answer`);
+                return;
+            }
 
-            if (pc.signalingState === "have-local-offer") {
-                try {
-                    await pc.setRemoteDescription(new RTCSessionDescription(answer));
-                    remoteDescSet.current[from] = true;
-                    await flushIceCandidates(from);
-                } catch (err) {
-                    console.error("[WebRTC] Error applying answer:", err);
-                }
+            if (pc.signalingState !== "have-local-offer") {
+                console.warn(
+                    `[WebRTC] Unexpected signaling state "${pc.signalingState}" when handling answer from ${from}`
+                );
+                return;
+            }
+
+            try {
+                await pc.setRemoteDescription(new RTCSessionDescription(answer));
+                remoteDescSet.current[from] = true;
+                console.log(`[WebRTC] Remote description (answer) set for ${from}`);
+                await flushIceCandidates(from);
+            } catch (err) {
+                console.error(`[WebRTC] Failed to handle answer from ${from}:`, err);
             }
         };
 
-        // ── Both: receive ICE candidate ─────────────────────────────────────
+        // BOTH: receive an ICE candidate from the other peer
         const handleIceCandidate = async ({ candidate, from }) => {
             if (!candidate) return;
+
+            const pc = pcs.current[from];
+            if (!pc) {
+                // PC might not exist yet — queue it anyway
+                console.log(`[ICE] No PC yet for ${from}, queuing candidate`);
+                queueIceCandidate(from, candidate);
+                return;
+            }
+
             if (remoteDescSet.current[from]) {
-                const pc = pcs.current[from];
-                if (!pc) return;
+                // Remote description is set — apply immediately
                 try {
                     await pc.addIceCandidate(new RTCIceCandidate(candidate));
+                    console.log(`[ICE] Applied candidate from ${from}: ${candidate.type}`);
                 } catch (err) {
-                    // Ignore benign errors (e.g., already closed)
+                    // Only log if it's not a harmless benign error
+                    if (!err.message.includes("Cannot add ICE candidate")) {
+                        console.warn(`[ICE] addIceCandidate error from ${from}:`, err.message);
+                    }
                 }
             } else {
-                // Buffer until setRemoteDescription is done
+                // Remote description not set yet — MUST buffer
+                console.log(`[ICE] Buffering candidate from ${from} (remoteDesc not set yet)`);
                 queueIceCandidate(from, candidate);
             }
         };
 
-        // ── New viewer joined — host re-initiates offers to them ─────────────
-        const handleUserJoined = ({ id: newUserId }) => {
-            if (!localStreamRef.current) return; // I'm not streaming
-            console.log(`[WebRTC] New user joined: ${newUserId} — initiating offer`);
-            const pc = createPeerConnection(newUserId, false);
-            addLocalTracksToPeer(pc);
-            // onnegotiationneeded will fire automatically and send the offer
+        // HOST receives: a NEW viewer just joined — send them an offer immediately 
+        // (only if we are already streaming)
+        const handleUserJoined = async ({ id: newUserId }) => {
+            if (!localStreamRef.current) return; // We're not the host
+            console.log(`[WebRTC] New viewer joined: ${newUserId} — sending offer proactively`);
+            const pc = createPeerConnection(newUserId);
+            addLocalTracks(pc);
+            await new Promise((r) => setTimeout(r, 50));
+            await sendOffer(newUserId);
         };
 
+        // Cleanup when a peer leaves
         const handleUserLeft = ({ id: leftUserId }) => {
+            console.log(`[WebRTC] User left: ${leftUserId} — closing PC`);
             if (pcs.current[leftUserId]) {
                 pcs.current[leftUserId].close();
                 delete pcs.current[leftUserId];
-                delete remoteDescSet.current[leftUserId];
-                delete iceCandidateQueue.current[leftUserId];
-                setPeerStates((prev) => {
-                    const next = { ...prev };
-                    delete next[leftUserId];
-                    return next;
-                });
             }
+            delete remoteDescSet.current[leftUserId];
+            delete iceCandidateQueue.current[leftUserId];
+            delete makingOfferRef.current[leftUserId];
+            setPeerStates((prev) => {
+                const next = { ...prev };
+                delete next[leftUserId];
+                return next;
+            });
         };
 
         socket.on("request-stream", handleRequestStream);
@@ -317,16 +431,15 @@ export function useWebRTC({ roomId, socket }) {
         socket,
         roomId,
         createPeerConnection,
-        addLocalTracksToPeer,
+        addLocalTracks,
+        sendOffer,
         flushIceCandidates,
         queueIceCandidate,
     ]);
 
-    // ── Cleanup on unmount ──────────────────────────────────────────────────
+    // ── Cleanup on unmount ────────────────────────────────────────────────────
     useEffect(() => {
-        return () => {
-            stopStream();
-        };
+        return () => stopStream();
     }, [stopStream]);
 
     return {

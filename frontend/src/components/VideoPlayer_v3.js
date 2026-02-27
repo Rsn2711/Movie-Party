@@ -183,50 +183,72 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
   }, [cleanRoomId, setStatus, stopStream]);
 
   // ── Capture stream from local video file ─────────────────────────────────
-  // CRITICAL FIX: use video.captureStream() directly (includes audio).
-  // Do NOT use canvas.captureStream() — canvas has no audio tracks.
+  // Uses video.captureStream() which captures decoded audio + video directly.
+  // captureStream() MUST be called after the video has started playing —
+  // calling it on a paused/unstarted video returns empty/inactive tracks.
   const beginFileStream = useCallback(
     (videoEl) => {
-      // captureStream returns a MediaStream with video + audio
       if (!videoEl.captureStream && !videoEl.mozCaptureStream) {
-        console.error("[VideoPlayer] captureStream not supported in this browser");
+        console.error("[VideoPlayer] captureStream() not supported in this browser");
         return;
       }
-      const stream =
-        videoEl.captureStream?.() ?? videoEl.mozCaptureStream?.();
 
-      console.log(
-        "[VideoPlayer] captureStream tracks:",
-        stream.getTracks().map((t) => t.kind)
-      );
+      // Wait 200 ms after play() so the decoder produces live track frames
+      // before we hand the stream to RTCPeerConnection.
+      setTimeout(() => {
+        const stream =
+          videoEl.captureStream?.() ?? videoEl.mozCaptureStream?.();
 
-      startStream(stream);
-      socket.emit("start-stream", cleanRoomId);
-      setStatus("Hosting File", true);
-      startHeartbeat();
+        const tracks = stream.getTracks();
+        console.log(
+          "[VideoPlayer] captureStream tracks:",
+          tracks.map((t) => `${t.kind}:${t.readyState}`)
+        );
 
-      // HOST-side video event listeners
-      let lastPlayState = null;
+        if (tracks.length === 0) {
+          console.error("[VideoPlayer] captureStream() returned no tracks! Video may not be playing.");
+          return;
+        }
 
-      videoEl.onplay = () => {
-        if (lastPlayState === "playing") return;
-        lastPlayState = "playing";
-        emitPlay();
-      };
+        const videoTracks = stream.getVideoTracks();
+        const audioTracks = stream.getAudioTracks();
 
-      videoEl.onpause = () => {
-        if (lastPlayState === "paused") return;
-        lastPlayState = "paused";
-        emitPause();
-      };
+        if (audioTracks.length === 0) {
+          console.warn("[VideoPlayer] No audio track captured (file may have no audio, or browser restriction).");
+        }
 
-      videoEl.onseeked = () => {
-        emitSeek(videoEl.currentTime);
-      };
+        // Hint the browser codec selection: "motion" is better for video files
+        videoTracks.forEach((t) => { try { t.contentHint = "motion"; } catch (_) { } });
+        audioTracks.forEach((t) => { try { t.contentHint = "music"; } catch (_) { } });
 
-      videoEl.onvolumechange = () => {
-        emitVolumeChange({ muted: videoEl.muted, volume: videoEl.volume });
-      };
+        startStream(stream);
+        socket.emit("start-stream", cleanRoomId);
+        setStatus("Hosting File", true);
+        startHeartbeat();
+
+        // HOST-side video event listeners
+        let lastPlayState = null;
+
+        videoEl.onplay = () => {
+          if (lastPlayState === "playing") return;
+          lastPlayState = "playing";
+          emitPlay();
+        };
+
+        videoEl.onpause = () => {
+          if (lastPlayState === "paused") return;
+          lastPlayState = "paused";
+          emitPause();
+        };
+
+        videoEl.onseeked = () => {
+          emitSeek(videoEl.currentTime);
+        };
+
+        videoEl.onvolumechange = () => {
+          emitVolumeChange({ muted: videoEl.muted, volume: videoEl.volume });
+        };
+      }, 200);
     },
     [cleanRoomId, startStream, startHeartbeat, emitPlay, emitPause, emitSeek, emitVolumeChange, setStatus]
   );
