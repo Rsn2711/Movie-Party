@@ -19,7 +19,7 @@
  *     useVideoSync({ socket, roomId, videoRef, isHost: false });
  */
 
-import { useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect, useState } from "react";
 
 const HEARTBEAT_INTERVAL_MS = 5000;
 const HARD_SEEK_THRESHOLD_S = 0.8;   // >0.8 s drift → hard seek
@@ -33,6 +33,13 @@ export function useVideoSync({ socket, roomId, videoRef, isHost }) {
     const seekDebounceRef = useRef(null);
     const isSyncingRef = useRef(false); // prevent event re-entrant loops
     const pingIntervalRef = useRef(null);
+
+    // State for UI to consume
+    const [roomTime, setRoomTime] = useState(0);
+    const [roomDuration, setRoomDuration] = useState(0);
+
+    // Host/Viewer track time in state for simpler UI consumption
+    const lastSyncRef = useRef({ playing: false, currentTime: 0, serverTime: 0, duration: 0 });
 
     const getCleanRoomId = useCallback(
         () => (roomId ? roomId.trim().toUpperCase() : ""),
@@ -69,9 +76,13 @@ export function useVideoSync({ socket, roomId, videoRef, isHost }) {
 
     // ── Apply sync to viewer's video element ────────────────────────────────
     const applySyncToViewer = useCallback(
-        ({ playing, currentTime, serverTime }) => {
+        ({ playing, currentTime, serverTime, duration }) => {
             const video = videoRef.current;
             if (!video || isHost) return;
+
+            // Store for interpolation
+            lastSyncRef.current = { playing, currentTime, serverTime, duration };
+            setRoomDuration(duration || 0);
 
             // Compute expected time accounting for one-way latency
             const oneWayLatency = rttRef.current / 2 / 1000; // seconds
@@ -125,15 +136,49 @@ export function useVideoSync({ socket, roomId, videoRef, isHost }) {
         heartbeatInterval.current = setInterval(() => {
             const video = videoRef.current;
             if (!video) return;
+            const duration = video.duration || 0;
+            const currentTime = video.currentTime || 0;
+            const playing = !video.paused;
+
             socket.emit("sync-heartbeat", {
                 roomId: getCleanRoomId(),
-                playing: !video.paused,
-                currentTime: video.currentTime,
+                playing,
+                currentTime,
+                duration,
             });
+
+            // Update local state for host UI (heartbeat is just for others, state is for local UI)
+            setRoomTime(currentTime);
+            setRoomDuration(duration);
         }, HEARTBEAT_INTERVAL_MS);
 
         console.log("[Sync] Heartbeat started");
     }, [isHost, socket, videoRef, getCleanRoomId, startRttMeasurement]);
+
+    // ── Host-only real-time tracking (for local UI smoothness) ──────────────
+    useEffect(() => {
+        if (!isHost) return;
+        const video = videoRef.current;
+        if (!video) return;
+
+        const onTimeUpdate = () => {
+            setRoomTime(video.currentTime);
+        };
+        const onLoadedMetadata = () => {
+            setRoomDuration(video.duration);
+        };
+
+        video.addEventListener("timeupdate", onTimeUpdate);
+        video.addEventListener("loadedmetadata", onLoadedMetadata);
+
+        // Initial capture
+        if (video.duration) setRoomDuration(video.duration);
+
+        return () => {
+            video.removeEventListener("timeupdate", onTimeUpdate);
+            video.removeEventListener("loadedmetadata", onLoadedMetadata);
+        };
+    }, [isHost, videoRef]);
 
     const stopHeartbeat = useCallback(() => {
         if (heartbeatInterval.current) {
@@ -168,6 +213,7 @@ export function useVideoSync({ socket, roomId, videoRef, isHost }) {
                         roomId: getCleanRoomId(),
                         playing: !video.paused,
                         currentTime: video.currentTime,
+                        duration: video.duration || 0,
                     });
                 }
             }, SEEK_DEBOUNCE_MS);
@@ -250,6 +296,23 @@ export function useVideoSync({ socket, roomId, videoRef, isHost }) {
         };
     }, [socket, isHost, videoRef, applySyncToViewer, startRttMeasurement, stopRttMeasurement]);
 
+    // ── Interpolate roomTime for viewers ────────────────────────────────────
+    useEffect(() => {
+        if (isHost) return;
+        const timer = setInterval(() => {
+            const { playing, currentTime, serverTime } = lastSyncRef.current;
+            if (!playing) {
+                setRoomTime(currentTime);
+                return;
+            }
+            const oneWayLatency = rttRef.current / 2 / 1000;
+            const elapsedSinceSync = (Date.now() - serverTime) / 1000;
+            setRoomTime(currentTime + oneWayLatency + elapsedSinceSync);
+        }, 100);
+
+        return () => clearInterval(timer);
+    }, [isHost]);
+
     // ── Cleanup ─────────────────────────────────────────────────────────────
     useEffect(() => {
         return () => {
@@ -265,6 +328,8 @@ export function useVideoSync({ socket, roomId, videoRef, isHost }) {
         emitVolumeChange,
         startHeartbeat,
         stopHeartbeat,
+        roomTime,
+        roomDuration,
         isSyncing: () => isSyncingRef.current,
     };
 }
