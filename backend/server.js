@@ -2,276 +2,325 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const path = require("path");
+const fs = require("fs");
 
 const app = express();
 const server = http.createServer(app);
 
-const fs = require("fs");
-
-// Serve static files from the frontend build directory if it exists
-const buildPath = path.join(__dirname, '../frontend/build');
+// ─── Static / Frontend ────────────────────────────────────────────────────────
+const buildPath = path.join(__dirname, "../frontend/build");
 if (fs.existsSync(buildPath)) {
   app.use(express.static(buildPath));
 }
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', message: 'Server is running' });
-});
+app.set("trust proxy", true);
 
-// Serve the frontend for all other routes
-app.get(/^(?!\/health|\/socket-health|\/socket\.io)/, (req, res) => {
-  if (fs.existsSync(path.join(buildPath, 'index.html'))) {
-    res.sendFile(path.join(buildPath, 'index.html'));
-  } else {
-    res.status(404).send(`
-      <h1>Frontend Build Not Found</h1>
-      <p>The backend is running on port ${process.env.PORT || 5000}, but the frontend build directory was not found.</p>
-      <p>If you are developing locally, please use the frontend development server at <strong>http://localhost:3000</strong>.</p>
-      <p>To run the production build, run <code>npm run build</code> in the frontend directory first.</p>
-    `);
-  }
-});
-
-const io = new Server(server, {
-  // Production-ready CORS configuration for Railway deployment
-  cors: {
-    origin: [
-  "https://movie-party-bice.vercel.app",
-  "https://movie-party-git-main-kumarraushan2797-6902s-projects.vercel.app",
-  "https://movie-party-5srathvcm-kumarraushan2797-6902s-projects.vercel.app",
-  "http://localhost:3000"
-],
-    methods: ["GET", "POST"],
-    credentials: true
-  },
-  // Critical: Configure transports properly for Railway's proxy
-  transports: ['websocket', 'polling'],
-  allowEIO3: true, // Allow older Engine.IO versions
-  cookie: false,   // Disable cookies for Railway compatibility
-
-  // Railway-specific settings for WebSocket upgrades
-  pingTimeout: 60000,
-  pingInterval: 25000,
-  allowUpgrades: true,
-  upgrade: true,
-  path: '/socket.io/',
-  serveClient: false,  // Don't serve client-side library
-  maxHttpBufferSize: 1e6, // 1MB for larger payloads
-
-  // Additional settings for Railway's infrastructure
-  perMessageDeflate: false, // Disable compression to avoid proxy issues
-  httpCompression: false    // Disable HTTP compression for WebSocket compatibility
-});
-
-// Enable trust proxy settings for Railway's load balancer
-app.set('trust proxy', true);
-
-// Add middleware to log requests for debugging
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.path} - Origin: ${req.get('Origin')}`);
+  // Skip logging for socket.io polling to reduce noise
+  if (!req.path.startsWith("/socket.io")) {
+    console.log(`${new Date().toISOString()} ${req.method} ${req.path}`);
+  }
   next();
 });
 
-// Properly configure Socket.IO to work with Railway's proxy
-io.engine.generateId = (req) => {
-  console.log(`New Socket.IO connection attempt from: ${req.connection.remoteAddress} - Origin: ${req.headers.origin}`);
-  // Use default ID generation
-  return (Date.now().toString(36) + Math.random().toString(36)).substr(2, 9);
-};
+app.get("/health", (_req, res) =>
+  res.json({ status: "OK", ts: Date.now(), rooms: Object.keys(rooms).length })
+);
 
-// Add event handlers for connection debugging
+app.get("/socket-health", (_req, res) =>
+  res.json({ status: "OK", clients: io.engine.clientsCount })
+);
+
+app.get(/^(?!\/health|\/socket-health|\/socket\.io)/, (req, res) => {
+  const index = path.join(buildPath, "index.html");
+  if (fs.existsSync(index)) {
+    res.sendFile(index);
+  } else {
+    res.status(404).send(
+      `<h1>Frontend build not found</h1>
+       <p>Run <code>npm run build</code> in the frontend directory.</p>
+       <p>Dev server: <a href="http://localhost:3000">http://localhost:3000</a></p>`
+    );
+  }
+});
+
+// ─── Socket.IO ────────────────────────────────────────────────────────────────
+const io = new Server(server, {
+  cors: {
+    origin: [
+      "https://movie-party-bice.vercel.app",
+      "https://movie-party-git-main-kumarraushan2797-6902s-projects.vercel.app",
+      "https://movie-party-5srathvcm-kumarraushan2797-6902s-projects.vercel.app",
+      "http://localhost:3000",
+    ],
+    methods: ["GET", "POST"],
+    credentials: true,
+  },
+  transports: ["websocket", "polling"],
+  allowEIO3: true,
+  cookie: false,
+  pingTimeout: 60000,
+  pingInterval: 25000,
+  allowUpgrades: true,
+  path: "/socket.io/",
+  serveClient: false,
+  maxHttpBufferSize: 1e6,
+  perMessageDeflate: false,
+  httpCompression: false,
+});
+
 io.engine.on("connection_error", (err) => {
-  console.error("Socket.IO Engine Error:", err.message, err.description);
-  console.error("Socket.IO Engine Error Details:", err.context);
+  console.error("[ENGINE] Connection error:", err.message);
 });
 
-io.on("connect_error", (err) => {
-  console.error("Socket.IO Connection Error:", err.message);
-});
-
-// Additional health check for Railway
-app.get('/socket-health', (req, res) => {
-  res.status(200).json({
-    status: 'OK',
-    message: 'Socket.IO server is running',
-    connectedSockets: io.engine.clientsCount
-  });
-});
-
-// Handle WebSocket upgrade events for debugging
-server.on('upgrade', (req, socket, head) => {
-  console.log(`WebSocket upgrade attempt to: ${req.url}`);
-  console.log(`Headers:`, req.headers);
-  console.log(`Origin:`, req.headers.origin);
-  console.log(`Connection:`, req.headers.connection);
-  console.log(`Upgrade:`, req.headers.upgrade);
-});
-
+// ─── Room State ──────────────────────────────────────────────────────────────
+/**
+ * rooms[roomId] = {
+ *   streamer: socketId | null,
+ *   members: Map<socketId, { username, joinedAt }>,
+ *   lastActivity: Date,
+ *   playState: { playing: bool, currentTime: number, serverTime: number } | null
+ * }
+ */
 const rooms = {};
 
 const generateRoomId = () =>
   Math.random().toString(36).substring(2, 8).toUpperCase();
 
+/** Remove empty rooms after 30 minutes of inactivity */
+setInterval(() => {
+  const now = Date.now();
+  for (const [roomId, room] of Object.entries(rooms)) {
+    if (
+      room.members.size === 0 &&
+      now - room.lastActivity > 30 * 60 * 1000
+    ) {
+      delete rooms[roomId];
+      console.log(`[CLEANUP] Removed empty room: ${roomId}`);
+    }
+  }
+}, 5 * 60 * 1000);
+
+const broadcastUserList = (roomId) => {
+  const room = rooms[roomId];
+  if (!room) return;
+  const list = [...room.members.entries()].map(([id, info]) => ({
+    id,
+    username: info.username,
+    isStreamer: id === room.streamer,
+  }));
+  io.to(roomId).emit("user-list", list);
+};
+
+// ─── Connection Handler ───────────────────────────────────────────────────────
 io.on("connection", (socket) => {
   console.log(`[CONNECT] ${socket.id}`);
-  console.log(`[CONNECT] Socket connected from: ${socket.handshake.address}`);
-  console.log(`[CONNECT] Socket handshake headers:`, socket.handshake.headers);
 
+  // ── Room management ──────────────────────────────────────────────────────
   socket.on("create-room", (callback) => {
     const roomId = generateRoomId();
-    console.log(`[CREATE] ${roomId}`);
-    rooms[roomId] = { streamer: null };
+    rooms[roomId] = {
+      streamer: null,
+      members: new Map(),
+      lastActivity: Date.now(),
+      playState: null,
+    };
     socket.join(roomId);
-    callback(roomId);
+    console.log(`[CREATE] Room: ${roomId} by ${socket.id}`);
+    if (typeof callback === "function") callback(roomId);
   });
 
   socket.on("join-room", ({ roomId, username }) => {
     if (!roomId) return;
-    const cleanRoomId = roomId.trim().toUpperCase();
-    console.log(`[JOIN] User: ${username} -> Room: ${cleanRoomId}`);
+    const id = roomId.trim().toUpperCase();
 
-    socket.join(cleanRoomId);
-    if (!rooms[cleanRoomId]) rooms[cleanRoomId] = { streamer: null };
+    if (!rooms[id]) {
+      rooms[id] = {
+        streamer: null,
+        members: new Map(),
+        lastActivity: Date.now(),
+        playState: null,
+      };
+    }
 
-    // Notify room
-    io.to(cleanRoomId).emit("user-joined", username);
+    socket.join(id);
+    rooms[id].members.set(socket.id, { username, joinedAt: Date.now() });
+    rooms[id].lastActivity = Date.now();
+    console.log(`[JOIN]  ${username} (${socket.id}) → Room: ${id}`);
 
-    // Direct reply to joiner
+    // Notify others
+    socket.to(id).emit("user-joined", { id: socket.id, username });
+
+    // Tell joiner current stream + playback state
     socket.emit("stream-status", {
-      isStreaming: !!rooms[cleanRoomId].streamer,
-      streamerId: rooms[cleanRoomId].streamer
+      isStreaming: !!rooms[id].streamer,
+      streamerId: rooms[id].streamer,
+      playState: rooms[id].playState,
     });
+
+    broadcastUserList(id);
   });
 
+  // ── Chat ─────────────────────────────────────────────────────────────────
   socket.on("send-message", ({ roomId, message, user }) => {
     if (!roomId) return;
-    const cleanRoomId = roomId.trim().toUpperCase();
-    console.log(`[MSG] Room: ${cleanRoomId}, User: ${user}: ${message}`);
-    io.to(cleanRoomId).emit("receive-message", { message, user });
+    const id = roomId.trim().toUpperCase();
+    io.to(id).emit("receive-message", { message, user, ts: Date.now() });
   });
 
+  // ── Streaming control ─────────────────────────────────────────────────────
   socket.on("start-stream", (roomId) => {
     if (!roomId) return;
-    const cleanRoomId = roomId.trim().toUpperCase();
-    console.log(`[STREAM_START] Room: ${cleanRoomId} by ${socket.id}`);
-    if (rooms[cleanRoomId]) {
-      rooms[cleanRoomId].streamer = socket.id;
-      io.to(cleanRoomId).emit("stream-started", { streamerId: socket.id });
-    }
+    const id = roomId.trim().toUpperCase();
+    if (!rooms[id]) return;
+    rooms[id].streamer = socket.id;
+    rooms[id].lastActivity = Date.now();
+    console.log(`[STREAM_START] Room: ${id} streamer: ${socket.id}`);
+    io.to(id).emit("stream-started", { streamerId: socket.id });
+    broadcastUserList(id);
   });
 
   socket.on("stop-stream", (roomId) => {
     if (!roomId) return;
-    const cleanRoomId = roomId.trim().toUpperCase();
-    console.log(`[STREAM_STOP] Room: ${cleanRoomId}`);
-    if (rooms[cleanRoomId] && rooms[cleanRoomId].streamer === socket.id) {
-      rooms[cleanRoomId].streamer = null;
-      io.to(cleanRoomId).emit("stream-stopped");
-    }
+    const id = roomId.trim().toUpperCase();
+    if (!rooms[id] || rooms[id].streamer !== socket.id) return;
+    rooms[id].streamer = null;
+    rooms[id].playState = null;
+    rooms[id].lastActivity = Date.now();
+    console.log(`[STREAM_STOP] Room: ${id}`);
+    io.to(id).emit("stream-stopped");
+    broadcastUserList(id);
   });
 
+  // When a newly-joined viewer asks the host to resend its stream
   socket.on("request-stream", (roomId) => {
     if (!roomId) return;
-    const cleanRoomId = roomId.trim().toUpperCase();
-    console.log(`[STREAM_REQ] Room: ${cleanRoomId} from ${socket.id}`);
-    if (rooms[cleanRoomId] && rooms[cleanRoomId].streamer) {
-      console.log(`[STREAM_REQ] Forwarding to streamer: ${rooms[cleanRoomId].streamer}`);
-      io.to(rooms[cleanRoomId].streamer).emit("request-stream", { from: socket.id });
-    } else {
-      console.log(`[STREAM_REQ] No streamer found in room ${cleanRoomId}`);
-    }
+    const id = roomId.trim().toUpperCase();
+    if (!rooms[id] || !rooms[id].streamer) return;
+    console.log(
+      `[STREAM_REQ] ${socket.id} requested stream in room ${id} → forwarding to ${rooms[id].streamer}`
+    );
+    io.to(rooms[id].streamer).emit("request-stream", { from: socket.id });
   });
 
-  socket.on("webrtc-offer", ({ roomId, offer, to }) => {
-    console.log(`[WEBRTC] Offer from ${socket.id} to ${to || 'room: ' + roomId}`);
-    if (to) {
-      io.to(to).emit("webrtc-offer", { offer, from: socket.id });
-      console.log(`[WEBRTC] Offer relayed to ${to}`);
-    } else if (roomId) {
-      const cleanRoomId = roomId.trim().toUpperCase();
-      socket.to(cleanRoomId).emit("webrtc-offer", { offer, from: socket.id });
-      console.log(`[WEBRTC] Offer broadcast to room ${cleanRoomId}`);
-    }
+  // ── WebRTC Signaling ──────────────────────────────────────────────────────
+  // Unicast relay — always use `to` field for targeted signaling
+  socket.on("webrtc-offer", ({ to, offer }) => {
+    if (!to || !offer) return;
+    console.log(`[SIG] offer  ${socket.id} → ${to}`);
+    io.to(to).emit("webrtc-offer", { offer, from: socket.id });
   });
 
   socket.on("webrtc-answer", ({ to, answer }) => {
-    console.log(`[WEBRTC] Answer from ${socket.id} to ${to}`);
-    if (to) {
-      io.to(to).emit("webrtc-answer", { answer, from: socket.id });
-      console.log(`[WEBRTC] Answer relayed to ${to}`);
-    }
+    if (!to || !answer) return;
+    console.log(`[SIG] answer ${socket.id} → ${to}`);
+    io.to(to).emit("webrtc-answer", { answer, from: socket.id });
   });
 
-  socket.on("webrtc-ice-candidate", ({ roomId, candidate, to }) => {
-    if (to) {
-      io.to(to).emit("webrtc-ice-candidate", { candidate, from: socket.id });
-    } else if (roomId) {
-      const cleanRoomId = roomId.trim().toUpperCase();
-      socket.to(cleanRoomId).emit("webrtc-ice-candidate", { candidate, from: socket.id });
-    }
+  socket.on("webrtc-ice-candidate", ({ to, candidate }) => {
+    if (!to || !candidate) return;
+    io.to(to).emit("webrtc-ice-candidate", { candidate, from: socket.id });
   });
 
-  socket.on("disconnecting", () => {
-    for (const roomId of socket.rooms) {
-      if (rooms[roomId] && rooms[roomId].streamer === socket.id) {
-        rooms[roomId].streamer = null;
-        io.to(roomId).emit("stream-stopped");
-      }
-    }
+  // ── Playback Sync ─────────────────────────────────────────────────────────
+  /**
+   * Host broadcasts sync-heartbeat every ~5 s.
+   * Server appends its own timestamp so viewers can calc RTT offset.
+   */
+  socket.on("sync-heartbeat", ({ roomId, playing, currentTime }) => {
+    if (!roomId) return;
+    const id = roomId.trim().toUpperCase();
+    if (!rooms[id] || rooms[id].streamer !== socket.id) return;
+
+    const payload = { playing, currentTime, serverTime: Date.now() };
+    rooms[id].playState = payload;
+    rooms[id].lastActivity = Date.now();
+
+    // Relay to all OTHER members
+    socket.to(id).emit("sync-heartbeat", payload);
   });
 
+  /** Viewer asks for an immediate state snapshot (e.g. just reconnected) */
+  socket.on("request-sync", (roomId) => {
+    if (!roomId) return;
+    const id = roomId.trim().toUpperCase();
+    if (!rooms[id] || !rooms[id].streamer) return;
+    // Forward the request to the host
+    io.to(rooms[id].streamer).emit("request-sync", { from: socket.id });
+  });
+
+  /** Host responds to a specific viewer's sync request */
+  socket.on("sync-response", ({ to, playing, currentTime }) => {
+    if (!to) return;
+    io.to(to).emit("sync-heartbeat", {
+      playing,
+      currentTime,
+      serverTime: Date.now(),
+    });
+  });
+
+  // Legacy play / pause / seek (kept for fallback compatibility)
   socket.on("play-video", (roomId) => {
-    if (roomId) {
-      const cleanRoomId = roomId.trim().toUpperCase();
-      console.log(`[SYNC] Play command in room ${cleanRoomId}`);
-      io.to(cleanRoomId).emit("play-video");
-    }
+    if (!roomId) return;
+    const id = roomId.trim().toUpperCase();
+    socket.to(id).emit("play-video");
   });
 
   socket.on("pause-video", (roomId) => {
-    if (roomId) {
-      const cleanRoomId = roomId.trim().toUpperCase();
-      console.log(`[SYNC] Pause command in room ${cleanRoomId}`);
-      io.to(cleanRoomId).emit("pause-video");
-    }
+    if (!roomId) return;
+    const id = roomId.trim().toUpperCase();
+    socket.to(id).emit("pause-video");
   });
 
   socket.on("seek-video", ({ roomId, time }) => {
-    if (roomId) {
-      const cleanRoomId = roomId.trim().toUpperCase();
-      console.log(`[SYNC] Seek to ${time} in room ${cleanRoomId}`);
-      io.to(cleanRoomId).emit("seek-video", time);
-    }
+    if (!roomId) return;
+    const id = roomId.trim().toUpperCase();
+    socket.to(id).emit("seek-video", time);
   });
 
   socket.on("volume-change", ({ roomId, muted, volume }) => {
-    if (roomId) {
-      const cleanRoomId = roomId.trim().toUpperCase();
-      console.log(`[SYNC] Volume change in room ${cleanRoomId} - muted: ${muted}, volume: ${volume}`);
-      io.to(cleanRoomId).emit("volume-change", { muted, volume });
+    if (!roomId) return;
+    const id = roomId.trim().toUpperCase();
+    socket.to(id).emit("volume-change", { muted, volume });
+  });
+
+  // ── RTT measurement ───────────────────────────────────────────────────────
+  socket.on("ping-rtt", (clientTime) => {
+    socket.emit("pong-rtt", clientTime);
+  });
+
+  // ── Disconnect ────────────────────────────────────────────────────────────
+  socket.on("disconnecting", () => {
+    for (const roomId of socket.rooms) {
+      if (!rooms[roomId]) continue;
+      rooms[roomId].members.delete(socket.id);
+      rooms[roomId].lastActivity = Date.now();
+
+      if (rooms[roomId].streamer === socket.id) {
+        rooms[roomId].streamer = null;
+        rooms[roomId].playState = null;
+        io.to(roomId).emit("stream-stopped");
+        console.log(`[DISCONNECT] Streamer left room ${roomId}`);
+      }
+
+      const username =
+        rooms[roomId].members.get(socket.id)?.username ?? "Unknown";
+      socket.to(roomId).emit("user-left", { id: socket.id, username });
+      broadcastUserList(roomId);
     }
+    console.log(`[DISCONNECT] ${socket.id}`);
   });
 });
 
+// ─── Start ───────────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
-
 server.listen(PORT, "0.0.0.0", () => {
-  console.log(`Backend running on port ${PORT}`);
-  console.log(`Server listening on 0.0.0.0:${PORT}`);
+  console.log(`✅ Backend running on port ${PORT}`);
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received, shutting down gracefully');
-  server.close(() => {
-    console.log('Process terminated');
-  });
-});
-
-process.on('SIGINT', () => {
-  console.log('SIGINT received, shutting down gracefully');
-  server.close(() => {
-    console.log('Process terminated');
-  });
-});
+process.on("SIGTERM", () =>
+  server.close(() => console.log("Process terminated (SIGTERM)"))
+);
+process.on("SIGINT", () =>
+  server.close(() => console.log("Process terminated (SIGINT)"))
+);

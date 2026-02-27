@@ -12,16 +12,16 @@ export default function Room() {
   useEffect(() => {
     if (!roomId) return;
     const cleanRoomId = roomId.trim().toUpperCase();
-    
+
     const name = prompt("Enter your name") || `User_${Math.floor(Math.random() * 1000)}`;
     setUsername(name);
     setReady(true);
-    
+
     console.log(`[ROOM] Joining: ${cleanRoomId} as ${name}`);
     socket.emit("join-room", { roomId: cleanRoomId, username: name });
 
-    const handleUserJoined = (name) => {
-      console.log(`[ROOM] Notification: ${name} joined`);
+    const handleUserJoined = ({ username: joinedName }) => {
+      console.log(`[ROOM] Notification: ${joinedName} joined`);
     };
 
     socket.on("user-joined", handleUserJoined);
@@ -48,7 +48,7 @@ export default function Room() {
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '20px' }}>
         <div className="royal-card" style={{ padding: '0', overflow: 'hidden' }}>
-          <VideoPlayer roomId={roomId} />
+          <VideoPlayer roomId={roomId} username={username} />
         </div>
         <div className="royal-card" style={{ display: 'flex', flexDirection: 'column', padding: '20px' }}>
           <Chat roomId={roomId} username={username} />
