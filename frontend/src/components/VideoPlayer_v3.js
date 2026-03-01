@@ -21,6 +21,7 @@ import React, {
 import socket from "../socket";
 import { useWebRTC } from "../hooks/useWebRTC";
 import { useVideoSync } from "../hooks/useVideoSync";
+import { MonitorPlay, Upload, Square } from "lucide-react";
 
 export default function VideoPlayer({ roomId, username = "Viewer" }) {
   const videoRef = useRef(null);
@@ -495,16 +496,16 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
         position: "relative",
       }}
     >
-      {/* ── Toolbar ── */}
+      {/* ── Netflix Toolbar ── */}
       <div
         style={{
-          padding: "8px 16px",
-          background: "rgba(0,0,0,0.85)",
+          padding: "6px 16px",
+          background: "#0A0A0A",
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          fontSize: "0.78rem",
-          borderBottom: "1px solid var(--border-color, #333)",
+          fontSize: "0.75rem",
+          borderBottom: "1px solid #1a1a1a",
           flexShrink: 0,
           zIndex: 5,
         }}
@@ -514,17 +515,17 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
           <div
             ref={statusDotRef}
             style={{
-              width: 8,
-              height: 8,
+              width: 7,
+              height: 7,
               borderRadius: "50%",
-              background: "#ffc107",
+              background: "#E50914",
               flexShrink: 0,
             }}
           />
-          <span style={{ color: "var(--text-secondary, #aaa)" }}>Status:</span>
+          <span style={{ color: "#737373", fontFamily: "Inter, sans-serif", fontSize: "0.72rem" }}>Status:</span>
           <span
             ref={statusTextRef}
-            style={{ color: "var(--accent-color, #d4af37)", fontWeight: "bold" }}
+            style={{ color: "#fff", fontWeight: "600", fontFamily: "Inter, sans-serif" }}
           >
             Idle
           </span>
@@ -532,14 +533,17 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
             <span
               style={{
                 marginLeft: 8,
-                fontSize: "0.68rem",
-                color: "#ff9800",
-                border: "1px solid #ff9800",
-                padding: "1px 5px",
-                borderRadius: 3,
+                fontSize: "0.65rem",
+                color: "#F40612",
+                border: "1px solid rgba(229,9,20,0.3)",
+                background: "rgba(229,9,20,0.08)",
+                padding: "2px 7px",
+                borderRadius: 4,
+                fontFamily: "Inter, sans-serif",
+                fontWeight: 600,
               }}
             >
-              Sync-only mode
+              Sync-only
             </span>
           )}
         </div>
@@ -549,18 +553,24 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
           amIStreamer && (
             <button
               onClick={handleStopStreaming}
-              className="royal-button"
               style={{
-                padding: "4px 12px",
-                fontSize: "0.72rem",
-                background: "#dc3545",
-                color: "#fff",
-                border: "none",
-                borderRadius: 4,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "4px 10px",
+                fontSize: "0.7rem",
+                background: "rgba(229,9,20,0.1)",
+                color: "#E50914",
+                border: "1px solid rgba(229,9,20,0.3)",
+                borderRadius: 5,
                 cursor: "pointer",
+                fontFamily: "Inter, sans-serif",
+                fontWeight: 600,
+                transition: "all 0.2s",
               }}
             >
-              Stop Streaming
+              <Square size={12} fill="#f87171" />
+              Stop
             </button>
           )
         ) : (
@@ -574,29 +584,45 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
             />
             <label
               htmlFor="video-upload"
-              className="royal-button"
               style={{
-                padding: "4px 12px",
-                fontSize: "0.72rem",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "4px 10px",
+                fontSize: "0.7rem",
+                background: "#E50914",
+                color: "#fff",
+                border: "none",
+                borderRadius: 5,
                 cursor: "pointer",
+                fontFamily: "Inter, sans-serif",
+                fontWeight: 700,
+                transition: "all 0.2s",
               }}
             >
-              📁 Local File
+              <Upload size={12} />
+              Local File
             </label>
             <button
               onClick={startScreenShare}
-              className="royal-button"
               style={{
-                padding: "4px 12px",
-                fontSize: "0.72rem",
-                background: "transparent",
-                border: "1px solid var(--accent-color, #d4af37)",
-                color: "var(--accent-color, #d4af37)",
-                borderRadius: 4,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                padding: "4px 10px",
+                fontSize: "0.7rem",
+                background: "#1a1a1a",
+                color: "#A3A3A3",
+                border: "1px solid #2a2a2a",
+                borderRadius: 5,
                 cursor: "pointer",
+                fontFamily: "Inter, sans-serif",
+                fontWeight: 600,
+                transition: "all 0.2s",
               }}
             >
-              🖥 Screen Share
+              <MonitorPlay size={12} />
+              Screen Share
             </button>
           </div>
         )}
@@ -629,34 +655,36 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
           muted={amIStreamer && !!videoSource} // host mutes self to avoid echo
         />
 
-        {/* ── Custom Control Bar (Professional Glassmorphism) ── */}
+        {/* ── CineSync Control Bar ── */}
         <div
           style={{
             position: "absolute",
-            bottom: isFullscreen ? 30 : 20,
+            bottom: isFullscreen ? 24 : 16,
             left: "50%",
-            transform: `translate(-50%, ${showControls ? "0" : "100px"})`,
-            width: "calc(100% - 40px)",
-            maxWidth: "900px",
-            padding: "16px 24px",
-            background: "rgba(10, 10, 10, 0.75)",
-            backdropFilter: "blur(16px)",
-            borderRadius: "16px",
-            border: "1px solid rgba(255,255,255,0.08)",
+            transform: `translate(-50%, ${showControls ? "0" : "120px"})`,
+            width: "calc(100% - 32px)",
+            maxWidth: "920px",
+            padding: "14px 20px",
+            background: "rgba(0,0,0,0.92)",
+            backdropFilter: "blur(24px)",
+            WebkitBackdropFilter: "blur(24px)",
+            borderRadius: "10px",
+            border: "1px solid rgba(229,9,20,0.18)",
             display: "flex",
             flexDirection: "column",
-            gap: "12px",
-            transition: "transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.4s",
+            gap: "10px",
+            transition: "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s",
             opacity: showControls ? 1 : 0,
             zIndex: 100,
-            boxShadow: "0 12px 40px rgba(0,0,0,0.6)",
+            boxShadow: "0 -4px 40px rgba(229,9,20,0.08), 0 16px 48px rgba(0,0,0,0.9)",
           }}
         >
-          {/* Row 1: Professional Seek Bar (Host Only) */}
+          {/* Row 1: CineSync Seek Bar (Host Only) */}
           {amIStreamer && (
             <div style={{ width: "100%", display: "flex", alignItems: "center", position: "relative" }}>
               <input
                 type="range"
+                className="seek-bar"
                 min="0"
                 max={roomDuration || 100}
                 step="0.1"
@@ -666,15 +694,9 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
                 onTouchEnd={handleSeekEnd}
                 style={{
                   width: "100%",
-                  height: "5px",
-                  borderRadius: "5px",
-                  background: `linear-gradient(to right, #ff0000 0%, #ff0000 ${roomDuration > 0 ? (localSeekTime / roomDuration) * 100 : 0
-                    }%, #444 ${roomDuration > 0 ? (localSeekTime / roomDuration) * 100 : 0
-                    }%, #444 100%)`,
-                  outline: "none",
-                  cursor: "pointer",
-                  appearance: "none",
-                  WebkitAppearance: "none",
+                  background: `linear-gradient(to right, #E50914 0%, #E50914 ${roomDuration > 0 ? (localSeekTime / roomDuration) * 100 : 0
+                    }%, #2a2a2a ${roomDuration > 0 ? (localSeekTime / roomDuration) * 100 : 0
+                    }%, #2a2a2a 100%)`,
                 }}
               />
             </div>
@@ -736,6 +758,7 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
                 </button>
                 <input
                   type="range"
+                  className="volume-bar"
                   min="0"
                   max="1"
                   step="0.05"
@@ -743,9 +766,7 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
                   onChange={handleLocalVolumeChange}
                   style={{
                     width: "70px",
-                    cursor: "pointer",
-                    accentColor: "#fff",
-                    height: "3px",
+                    background: `linear-gradient(to right, #E50914 ${(isMuted ? 0 : volume) * 100}%, #2a2a2a ${(isMuted ? 0 : volume) * 100}%)`,
                   }}
                 />
               </div>
@@ -797,44 +818,56 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
         </div>
 
         {/* Viewer "Synced" badge (only top-right) */}
+        {/* Viewer - synced badge */}
         {!amIStreamer && isStreaming && !showControls && (
           <div
             style={{
               position: "absolute",
-              top: 10,
-              right: 10,
-              padding: "3px 8px",
-              background: "rgba(0,0,0,0.7)",
-              color: "var(--accent-color, #d4af37)",
-              fontSize: "0.68rem",
+              top: 12,
+              right: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "4px 10px",
+              background: "rgba(229,9,20,0.12)",
+              color: "#E50914",
+              fontSize: "0.65rem",
               borderRadius: 4,
-              border: "1px solid var(--accent-color, #d4af37)",
+              border: "1px solid rgba(229,9,20,0.3)",
               pointerEvents: "none",
-              transition: "opacity 0.3s",
-              opacity: 1,
+              fontFamily: "Inter, sans-serif",
+              fontWeight: 700,
+              letterSpacing: "0.06em",
             }}
           >
-            👥 Synced
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#E50914", display: "block" }} />
+            ● LIVE
           </div>
         )}
 
-        {/* Peer count badge (host) */}
+        {/* Host — viewer count badge */}
         {amIStreamer && userList.length > 1 && (
           <div
             style={{
               position: "absolute",
-              top: 10,
-              left: 10,
-              padding: "3px 8px",
-              background: "rgba(0,0,0,0.7)",
-              color: "#4caf50",
-              fontSize: "0.68rem",
+              top: 12,
+              left: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+              padding: "4px 10px",
+              background: "rgba(229,9,20,0.08)",
+              color: "#E50914",
+              fontSize: "0.65rem",
               borderRadius: 4,
-              border: "1px solid #4caf50",
+              border: "1px solid rgba(229,9,20,0.25)",
               pointerEvents: "none",
+              fontFamily: "Inter, sans-serif",
+              fontWeight: 700,
+              letterSpacing: "0.04em",
             }}
           >
-            👤 {userList.length - 1} viewer{userList.length !== 2 ? "s" : ""}
+            🎬 Host · {userList.length - 1} viewer{userList.length !== 2 ? "s" : ""}
           </div>
         )}
 
@@ -849,49 +882,54 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
               flexDirection: "column",
               justifyContent: "center",
               alignItems: "center",
-              background: "rgba(0,0,0,0.88)",
+              background: "rgba(0,0,0,0.92)",
               cursor: "pointer",
-              backdropFilter: "blur(6px)",
+              backdropFilter: "blur(12px)",
+              WebkitBackdropFilter: "blur(12px)",
               zIndex: 10,
+              gap: 20,
             }}
           >
             <div
               style={{
-                width: 90,
-                height: 90,
+                width: 88,
+                height: 88,
                 borderRadius: "50%",
-                background: "var(--accent-color, #d4af37)",
+                background: "#E50914",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                marginBottom: 20,
-                boxShadow: "0 4px 24px rgba(212,175,55,0.5)",
+                boxShadow: "0 0 40px rgba(229,9,20,0.6), 0 8px 32px rgba(0,0,0,0.6)",
               }}
             >
-              <svg width="44" height="44" viewBox="0 0 24 24" fill="white">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="white">
                 <path d="M8 5v14l11-7z" />
               </svg>
             </div>
-            <p
-              style={{
-                color: "var(--accent-color, #d4af37)",
-                fontSize: "1.2rem",
-                fontWeight: 600,
-                marginBottom: 8,
-              }}
-            >
-              Click to Watch
-            </p>
-            <p
-              style={{
-                color: "#aaa",
-                fontSize: "0.85rem",
-                textAlign: "center",
-                maxWidth: "75%",
-              }}
-            >
-              Browser security requires a click before audio plays.
-            </p>
+            <div style={{ textAlign: "center" }}>
+              <p
+                style={{
+                  color: "#f8fafc",
+                  fontSize: "1.1rem",
+                  fontWeight: 700,
+                  fontFamily: "Outfit, sans-serif",
+                  marginBottom: 6,
+                }}
+              >
+                Click to Watch
+              </p>
+              <p
+                style={{
+                  color: "#94a3b8",
+                  fontSize: "0.8rem",
+                  fontFamily: "Inter, sans-serif",
+                  maxWidth: "75%",
+                  margin: "0 auto",
+                }}
+              >
+                Browser security requires a click before audio plays.
+              </p>
+            </div>
           </div>
         )}
 
@@ -905,27 +943,32 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
               flexDirection: "column",
               justifyContent: "center",
               alignItems: "center",
-              color: "#555",
               pointerEvents: "none",
+              gap: 16,
             }}
           >
-            <svg
-              width="64"
-              height="64"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              style={{ marginBottom: 16, opacity: 0.3 }}
+            <div
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: 20,
+                background: "rgba(99,102,241,0.08)",
+                border: "1px solid rgba(99,102,241,0.2)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              <rect x="2" y="2" width="20" height="20" rx="2" ry="2" />
-              <line x1="7" y1="2" x2="7" y2="22" />
-              <line x1="17" y1="2" x2="17" y2="22" />
-              <line x1="2" y1="12" x2="22" y2="12" />
-            </svg>
-            <p style={{ fontSize: "0.9rem" }}>Select a video to begin the show</p>
+              <MonitorPlay size={36} color="rgba(229,9,20,0.4)" strokeWidth={1.5} />
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <p style={{ fontSize: "0.9rem", color: "#94a3b8", fontFamily: "Outfit, sans-serif", fontWeight: 600, marginBottom: 4 }}>
+                No content streaming
+              </p>
+              <p style={{ fontSize: "0.75rem", color: "#475569", fontFamily: "Inter, sans-serif" }}>
+                Use the toolbar above to load a file or share your screen
+              </p>
+            </div>
           </div>
         )}
       </div>
