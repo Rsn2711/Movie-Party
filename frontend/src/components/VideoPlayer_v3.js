@@ -38,10 +38,13 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
   const [userList, setUserList] = useState([]);
 
   // Local UI state (local only, not synced)
-  const [volume, setVolume] = useState(1);
+  const [volume, setVolume] = useState(0.5);
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [hoverLocal, setHoverLocal] = useState(false);
+  const [hoverScreen, setHoverScreen] = useState(false);
+  const [hoverStop, setHoverStop] = useState(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
   // We keep local time state only for the host to handle its own slider interaction smoothly
@@ -282,11 +285,14 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
         // Initial duration for host state
         setLocalSeekTime(videoEl.currentTime);
 
-        // — Initial Pause —
-        // The user wants the video to be paused initially after adding it.
-        // We play it briefly just to ensure captureStream tracks are active,
-        // then pause it so the user can click "Play/Resume" manually.
-        videoEl.pause();
+        // — Initial Volume —
+        videoEl.volume = volume;
+        videoEl.muted = isMuted;
+
+        // — Autoplay —
+        // The user wants the video to automatically play.
+        // We previously paused it here; now we let it continue playing.
+        // videoEl.pause(); 
       }, 200);
     },
     [cleanRoomId, startStream, startHeartbeat, emitPlay, emitPause, emitSeek, emitVolumeChange, setStatus]
@@ -553,13 +559,15 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
           amIStreamer && (
             <button
               onClick={handleStopStreaming}
+              onMouseEnter={() => setHoverStop(true)}
+              onMouseLeave={() => setHoverStop(false)}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
                 padding: "4px 10px",
                 fontSize: "0.7rem",
-                background: "rgba(229,9,20,0.1)",
+                background: hoverStop ? "rgba(229,9,20,0.2)" : "rgba(229,9,20,0.1)",
                 color: "#E50914",
                 border: "1px solid rgba(229,9,20,0.3)",
                 borderRadius: 5,
@@ -584,13 +592,15 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
             />
             <label
               htmlFor="video-upload"
+              onMouseEnter={() => setHoverLocal(true)}
+              onMouseLeave={() => setHoverLocal(false)}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
                 padding: "4px 10px",
                 fontSize: "0.7rem",
-                background: "#E50914",
+                background: hoverLocal ? "#f40612" : "#E50914",
                 color: "#fff",
                 border: "none",
                 borderRadius: 5,
@@ -605,14 +615,16 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
             </label>
             <button
               onClick={startScreenShare}
+              onMouseEnter={() => setHoverScreen(true)}
+              onMouseLeave={() => setHoverScreen(false)}
               style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
                 padding: "4px 10px",
                 fontSize: "0.7rem",
-                background: "#1a1a1a",
-                color: "#A3A3A3",
+                background: hoverScreen ? "#262626" : "#1a1a1a",
+                color: hoverScreen ? "#fff" : "#A3A3A3",
                 border: "1px solid #2a2a2a",
                 borderRadius: 5,
                 cursor: "pointer",
@@ -652,7 +664,7 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
           controls={false} // Custom controls instead
           autoPlay
           playsInline
-          muted={amIStreamer && !!videoSource} // host mutes self to avoid echo
+          muted={isMuted} // host uses local muted state
         />
 
         {/* ── CineSync Control Bar ── */}
@@ -916,7 +928,7 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
                   marginBottom: 6,
                 }}
               >
-                Click to Watch
+                Resume
               </p>
               <p
                 style={{

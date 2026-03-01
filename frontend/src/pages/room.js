@@ -8,6 +8,43 @@ import Chat from '../components/Chat';
 import Loader from '../components/ui/Loader';
 import Button from '../components/ui/Button';
 
+const ElectricZap = ({ delay = 0, d = "M 10,20 L 25,10 L 40,25 L 60,15 L 80,30 L 105,20" }) => {
+  return (
+    <motion.svg
+      className="absolute top-1/2 -translate-y-1/2 left-4 pointer-events-none overflow-visible"
+      width="100"
+      height="30"
+      viewBox="0 0 120 40"
+      initial="hidden"
+      animate="visible"
+    >
+      <motion.path
+        d={d}
+        stroke="#E50914"
+        strokeWidth="1.5"
+        fill="none"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        variants={{
+          hidden: { pathLength: 0, opacity: 0 },
+          visible: {
+            pathLength: [0, 1, 1],
+            opacity: [0, 1, 0],
+            transition: {
+              duration: 0.4 + Math.random() * 0.4,
+              repeat: Infinity,
+              repeatDelay: 1.2 + Math.random() * 2.5,
+              delay: delay,
+              ease: "easeInOut"
+            }
+          }
+        }}
+        style={{ filter: 'drop-shadow(0 0 3px rgba(229,9,20,0.8)) blur(0.2px)' }}
+      />
+    </motion.svg>
+  );
+};
+
 export default function Room() {
   const { roomId } = useParams();
   const navigate = useNavigate();
@@ -89,7 +126,23 @@ export default function Room() {
       {/* ── Top Bar ── */}
       <header className="flex items-center gap-4 px-4 md:px-5 h-12 bg-[#0A0A0A] border-b border-[#1a1a1a] flex-shrink-0 z-20">
         {/* Logo */}
-        <span className="font-extrabold text-red-brand text-base tracking-tight hidden sm:block">CS</span>
+        <div className="flex items-center gap-2 cursor-pointer h-full relative" onClick={() => navigate('/')}>
+          <ElectricZap delay={0.2} d="M 10,20 L 25,10 L 40,25 L 60,15 L 80,30 L 105,20" />
+          <ElectricZap delay={1.1} d="M 12,15 L 30,25 L 50,10 L 75,28 L 95,15" />
+
+          <div className="w-8 h-8 relative z-10 flex-shrink-0" style={{ filter: 'drop-shadow(0 0 6px rgba(229,9,20,0.3))' }}>
+            <img
+              src="/logo_transparent.png"
+              alt="CineSync Logo"
+              className="w-full h-full object-contain"
+            />
+          </div>
+
+          <div className="flex items-center gap-0 relative z-10">
+            <span className="text-white font-black text-lg tracking-tight -translate-y-0.5 inline-block">cine</span>
+            <span className="text-red-brand font-black text-lg tracking-tight translate-y-0.5 inline-block">sync</span>
+          </div>
+        </div>
         <div className="h-4 w-px bg-[#2a2a2a] hidden sm:block" />
 
         {/* Room code pill */}
