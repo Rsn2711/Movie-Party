@@ -227,12 +227,12 @@ io.on("connection", (socket) => {
    * Host broadcasts sync-heartbeat every ~5 s.
    * Server appends its own timestamp so viewers can calc RTT offset.
    */
-  socket.on("sync-heartbeat", ({ roomId, playing, currentTime }) => {
+  socket.on("sync-heartbeat", ({ roomId, playing, currentTime, duration }) => {
     if (!roomId) return;
     const id = roomId.trim().toUpperCase();
     if (!rooms[id] || rooms[id].streamer !== socket.id) return;
 
-    const payload = { playing, currentTime, serverTime: Date.now() };
+    const payload = { playing, currentTime, duration, serverTime: Date.now() };
     rooms[id].playState = payload;
     rooms[id].lastActivity = Date.now();
 
@@ -250,11 +250,12 @@ io.on("connection", (socket) => {
   });
 
   /** Host responds to a specific viewer's sync request */
-  socket.on("sync-response", ({ to, playing, currentTime }) => {
+  socket.on("sync-response", ({ to, playing, currentTime, duration }) => {
     if (!to) return;
     io.to(to).emit("sync-heartbeat", {
       playing,
       currentTime,
+      duration,
       serverTime: Date.now(),
     });
   });

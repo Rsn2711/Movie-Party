@@ -196,7 +196,7 @@ export function useWebRTC({ roomId, socket }) {
                 }
                 const incomingStream = streams[0];
                 setRemoteStream((prev) => {
-                    if (prev && prev.id === incomingStream.id) return prev; // no-op if same
+                    if (prev === incomingStream) return prev; // no-op if same instance
                     console.log(`[WebRTC] Assigning remote stream ${incomingStream.id}`);
                     return incomingStream;
                 });
@@ -294,6 +294,14 @@ export function useWebRTC({ roomId, socket }) {
 
             if (!localStreamRef.current) {
                 console.warn("[WebRTC] request-stream received but no local stream — ignoring");
+                return;
+            }
+
+            // If we are already negotiating or connected to this peer, don't restart PC
+            // to avoid interrupting the proactive offer from handleUserJoined.
+            const existingPc = pcs.current[from];
+            if (existingPc && (existingPc.connectionState === "connected" || existingPc.connectionState === "connecting")) {
+                console.log(`[WebRTC] Already have an active PC for ${from} (${existingPc.connectionState}), skipping duplicate request`);
                 return;
             }
 

@@ -100,8 +100,9 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !remoteStream || amIStreamer) return;
-    // Only reassign if stream actually changed → prevents flicker
-    if (video.srcObject?.id === remoteStream.id) return;
+    // Only reassign if stream instance actually changed
+    // Comparing ID is unreliable if PC is recreated with same stream ID
+    if (video.srcObject === remoteStream) return;
 
     console.log("[VideoPlayer] Assigning remote stream to video element");
     video.srcObject = remoteStream;
@@ -198,18 +199,31 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
 
     const handleUserList = (list) => setUserList(list);
 
+    const handleRequestSync = ({ from }) => {
+      const video = videoRef.current;
+      if (!video || !amIStreamer) return;
+      socket.emit("sync-response", {
+        to: from,
+        playing: !video.paused,
+        currentTime: video.currentTime,
+        duration: video.duration || 0,
+      });
+    };
+
     socket.on("stream-status", handleStreamStatus);
     socket.on("stream-started", handleStreamStarted);
     socket.on("stream-stopped", handleStreamStopped);
     socket.on("user-list", handleUserList);
+    socket.on("request-sync", handleRequestSync);
 
-    socket.emit("join-room", { roomId: cleanRoomId, username: "Viewer" });
+    socket.emit("join-room", { roomId: cleanRoomId, username });
 
     return () => {
       socket.off("stream-status", handleStreamStatus);
       socket.off("stream-started", handleStreamStarted);
       socket.off("stream-stopped", handleStreamStopped);
       socket.off("user-list", handleUserList);
+      socket.off("request-sync", handleRequestSync);
     };
   }, [cleanRoomId, setStatus, stopStream]);
 
