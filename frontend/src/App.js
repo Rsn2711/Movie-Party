@@ -149,6 +149,15 @@ function Navbar({ connected }) {
 
   const closeMenu = useCallback(() => setMenuOpen(false), []);
 
+  // Prevent body scroll when menu is open
+  useEffect(() => {
+    if (menuOpen) {
+      const original = window.getComputedStyle(document.body).overflow;
+      document.body.style.overflow = 'hidden';
+      return () => { document.body.style.overflow = original; };
+    }
+  }, [menuOpen]);
+
   // Don't render navbar inside rooms (after all hooks)
   if (pathname.startsWith('/room/')) return null;
 
@@ -235,7 +244,7 @@ export default function App() {
 
   return (
     <ToastProvider>
-      <div className="min-h-dvh bg-bg-base text-white overflow-x-hidden">
+      <div className="min-h-dvh bg-bg-base text-white">
         <Navbar connected={connected} />
         <AnimatePresence mode="wait">
           <Routes>

@@ -20,11 +20,11 @@
   html {
     scroll-behavior: smooth;
     background: #080808;
-    /* Prevent horizontal scroll globally */
-    overflow-x: hidden;
     /* Consistent text rendering */
     text-rendering: optimizeLegibility;
     -webkit-text-size-adjust: 100%;
+    /* Ensure no scroll locking on HTML */
+    overflow-x: visible;
   }
 
   body {
@@ -35,9 +35,14 @@
     margin: 0;
     padding: 0;
     line-height: 1.6;
-    /* Prevent horizontal overflow */
+    /* Prevent horizontal overflow only at body level */
     overflow-x: hidden;
+    /* Enable momentum scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
     min-height: 100dvh;
+    /* Fallback for older browsers */
+    min-height: -webkit-fill-available;
   }
 
   /* ── Focus Ring — Consistent WCAG-compliant focus indicator ── */

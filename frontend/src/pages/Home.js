@@ -771,13 +771,13 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-dvh bg-bg-base flex flex-col overflow-x-hidden">
+    <div className="min-h-dvh bg-bg-base flex flex-col">
 
       {/* ═══════════════════════════════════════════════════════════
           HERO SECTION
       ═══════════════════════════════════════════════════════════ */}
       <section
-        className="relative flex-1 flex items-center pt-20 sm:pt-24 pb-12 sm:pb-16 overflow-hidden min-h-screen"
+        className="relative flex items-center pt-24 sm:pt-24 pb-12 sm:pb-24 min-h-[100dvh]"
         aria-label="Hero section"
       >
         <AmbientBackground />
@@ -822,7 +822,7 @@ export default function Home() {
                 variants={leftVariants}
                 initial="hidden"
                 animate="visible"
-                className="block sm:hidden w-full origin-center -my-10 relative"
+                className="block sm:hidden w-full origin-center -my-10 relative pointer-events-none"
                 style={{ scale: 0.5 }}
               >
                 <FloatingLogos />

@@ -208,7 +208,8 @@ export default function Chat({ roomId, username }) {
       <div
         ref={listRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3 min-h-0"
+        className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3 min-h-0 overscroll-contain"
+        style={{ WebkitOverflowScrolling: 'touch' }}
         role="log"
         aria-live="polite"
         aria-label="Chat messages"
