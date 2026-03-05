@@ -1,7 +1,7 @@
 import { io } from "socket.io-client";
 
 // Use environment-based backend URL with fallback options
-const BACKEND_URL = process.env.NODE_ENV === 'production' 
+const BACKEND_URL = process.env.NODE_ENV === 'production'
   ? process.env.REACT_APP_BACKEND_URL || "https://movie-watch-party-production.up.railway.app"
   : "http://localhost:5000";
 
@@ -13,21 +13,21 @@ const socket = io(BACKEND_URL, {
   transports: ["polling", "websocket"],  // Try polling first as fallback
   upgrade: true,                        // Allow transport upgrades
   rememberUpgrade: false,               // Don't remember failed upgrades
-  
+
   // Connection settings for production stability
   reconnection: true,
   reconnectionDelay: 2000,
   reconnectionDelayMax: 10000,
   reconnectionAttempts: 10,
-  
+
   // Timeout and performance settings
   timeout: 15000,
   autoConnect: true,
-  
+
   // Security and proxy settings for Railway
-  withCredentials: false,
+  withCredentials: true,
   rejectUnauthorized: false,  // Allow self-signed certificates if needed
-  
+
   // Additional options for Railway's proxy infrastructure
   forceNew: true,             // Create a new connection instance
   path: '/socket.io/',        // Match backend path configuration

@@ -42,21 +42,18 @@ const ICE_CONFIG = {
         { urls: "stun:stun.l.google.com:19302" },
         { urls: "stun:stun1.l.google.com:19302" },
         { urls: "stun:stun2.l.google.com:19302" },
+        { urls: "stun:stun3.l.google.com:19302" },
+        { urls: "stun:stun4.l.google.com:19302" },
+        { urls: "stun:stun.services.mozilla.com" },
 
-        // ── Free TURN for testing (openrelay.metered.ca) ──
-        // These allow NAT traversal when STUN alone fails (production deployments)
+        // ── Free TURN servers (openrelay.metered.ca) ──
+        // These allow NAT traversal when STUN alone fails (e.g. carrier NAT)
         {
-            urls: "turn:openrelay.metered.ca:80",
-            username: "openrelayproject",
-            credential: "openrelayproject",
-        },
-        {
-            urls: "turn:openrelay.metered.ca:443",
-            username: "openrelayproject",
-            credential: "openrelayproject",
-        },
-        {
-            urls: "turn:openrelay.metered.ca:443?transport=tcp",
+            urls: [
+                "turn:openrelay.metered.ca:80",
+                "turn:openrelay.metered.ca:443",
+                "turn:openrelay.metered.ca:443?transport=tcp"
+            ],
             username: "openrelayproject",
             credential: "openrelayproject",
         },
@@ -165,9 +162,16 @@ export function useWebRTC({ roomId, socket }) {
                         "  1. No TURN server reached (symmetric NAT)\n" +
                         "  2. Firewall blocking UDP ports\n" +
                         "  3. ICE candidates dropped before setRemoteDescription\n" +
-                        "Activating Socket.io-only fallback sync."
+                        "Attempting ICE restart if host..."
                     );
-                    setUsingFallback(true);
+
+                    // Attempt ICE restart if we are the host (viewer will react)
+                    if (localStreamRef.current && pc.restartIce) {
+                        console.log("[WebRTC] Triggering ICE restart for", peerId);
+                        sendOffer(peerId);
+                    } else {
+                        setUsingFallback(true);
+                    }
                 }
 
                 if (s === "disconnected") {
@@ -175,6 +179,7 @@ export function useWebRTC({ roomId, socket }) {
                     console.warn(`[ICE] Disconnected — attempting restart for ${peerId}`);
                     if (localStreamRef.current && pc.restartIce) {
                         pc.restartIce();
+                        sendOffer(peerId);
                     }
                 }
             };
@@ -297,12 +302,18 @@ export function useWebRTC({ roomId, socket }) {
                 return;
             }
 
-            // If we are already negotiating or connected to this peer, don't restart PC
-            // to avoid interrupting the proactive offer from handleUserJoined.
+            // GLARE GUARD: If we already have an active or negotiating PC for this peer,
+            // don't restart it. Re-creating the PC closes the old one, which would kill 
+            // the proactive offer sent by handleUserJoined.
             const existingPc = pcs.current[from];
-            if (existingPc && (existingPc.connectionState === "connected" || existingPc.connectionState === "connecting")) {
-                console.log(`[WebRTC] Already have an active PC for ${from} (${existingPc.connectionState}), skipping duplicate request`);
-                return;
+            if (existingPc) {
+                const isNegotiating = existingPc.signalingState !== "stable";
+                const isConnecting = ["connecting", "connected"].includes(existingPc.connectionState);
+
+                if (isNegotiating || isConnecting) {
+                    console.log(`[WebRTC] Peer ${from} already has active PC (SS: ${existingPc.signalingState}, CS: ${existingPc.connectionState}). Skipping duplicate start.`);
+                    return;
+                }
             }
 
             const pc = createPeerConnection(from);

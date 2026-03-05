@@ -1,8 +1,11 @@
-/* App.css — CineSync Netflix Theme
-   Tailwind handles all design. This file only resets legacy styles.
+/* App.css — CineSync Design System
+   Tailwind handles the design. This file handles:
+   1. Legacy class cleanup
+   2. Global interaction defaults
+   3. CSS-only utilities not in the Tailwind config
 */
 
-/* Completely reset old "royal" theme classes */
+/* ── Legacy theme reset ── */
 .royal-header,
 .royal-card,
 .royal-button,
@@ -10,16 +13,53 @@
   all: unset;
 }
 
-/* Netflix-style focus ring global override */
+/* ── Global focus ring ── */
 *:focus-visible {
   outline: 2px solid #E50914;
   outline-offset: 2px;
 }
 
-/* Prevent text selection flickers on interactive elements */
+/* ── Tap highlight removal ── */
 button,
 a,
-label {
+label,
+[role="button"] {
   -webkit-tap-highlight-color: transparent;
+}
+
+/* ── Prevent layout break on ultra-wide ── */
+#root {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* ── Height utilities for full-viewport layouts ── */
+.h-dvh {
+  height: 100dvh;
+}
+
+.min-h-dvh {
+  min-height: 100dvh;
+}
+
+/* ── Minimum tap target for accessibility ── */
+.tap-min {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* ── Smooth image rendering ── */
+img {
+  image-rendering: -webkit-optimize-contrast;
+}
+
+/* ── Remove resize handle from textarea only when explicitly set ── */
+textarea {
+  resize: none;
+}
+
+/* ── Video player prevent context menu ── */
+video {
+  -webkit-user-select: none;
   user-select: none;
 }

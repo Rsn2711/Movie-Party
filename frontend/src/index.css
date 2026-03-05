@@ -1,9 +1,12 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Great+Vibes&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Great+Vibes&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   BASE LAYER — Reset & Typography Foundation
+───────────────────────────────────────────────────────────────────────────── */
 @layer base {
 
   *,
@@ -16,26 +19,68 @@
 
   html {
     scroll-behavior: smooth;
-    background: #0A0A0A;
+    background: #080808;
+    /* Prevent horizontal scroll globally */
+    overflow-x: hidden;
+    /* Consistent text rendering */
+    text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
   }
 
   body {
-    background-color: #0A0A0A;
+    background-color: #080808;
     color: #FFFFFF;
     font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     margin: 0;
     padding: 0;
     line-height: 1.6;
+    /* Prevent horizontal overflow */
+    overflow-x: hidden;
+    min-height: 100dvh;
   }
 
-  /* Custom Scrollbar — Netflix thin style */
+  /* ── Focus Ring — Consistent WCAG-compliant focus indicator ── */
+  *:focus-visible {
+    outline: 2px solid #E50914;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* ── Tap Highlight — Remove on interactive elements ── */
+  button,
+  a,
+  label,
+  [role="button"] {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+
+  /* ── Typography Scale — Fluid responsive sizing ── */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: 'Inter', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+  }
+
+  p {
+    line-height: 1.7;
+  }
+
+  /* ── Custom Scrollbar — Thin Netflix-style ── */
   ::-webkit-scrollbar {
     width: 4px;
     height: 4px;
   }
 
   ::-webkit-scrollbar-track {
-    background: #0A0A0A;
+    background: transparent;
   }
 
   ::-webkit-scrollbar-thumb {
@@ -46,11 +91,43 @@
   ::-webkit-scrollbar-thumb:hover {
     background: #F40612;
   }
+
+  /* ── Selection ── */
+  ::selection {
+    background: rgba(229, 9, 20, 0.3);
+    color: #ffffff;
+  }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   COMPONENTS LAYER — Reusable Design Patterns
+───────────────────────────────────────────────────────────────────────────── */
 @layer components {
 
-  /* Seek bar — Netflix red progress */
+  /* ── Container ── */
+  .container-content {
+    @apply w-full max-w-[1280px] mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  .container-narrow {
+    @apply w-full max-w-[960px] mx-auto px-4 sm:px-6 lg:px-8;
+  }
+
+  /* ── Section Spacing ── */
+  .section-padding {
+    @apply py-16 sm:py-20 lg:py-24;
+  }
+
+  /* ── Typography Utilities ── */
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  /* ── Seek Bar — Netflix-style video progress ── */
   input[type='range'].seek-bar {
     -webkit-appearance: none;
     appearance: none;
@@ -58,7 +135,8 @@
     border-radius: 2px;
     cursor: pointer;
     outline: none;
-    transition: height 0.15s;
+    transition: height 0.15s ease;
+    width: 100%;
   }
 
   input[type='range'].seek-bar:hover {
@@ -74,14 +152,23 @@
     background: #FFFFFF;
     cursor: pointer;
     box-shadow: 0 0 0 2px rgba(229, 9, 20, 0.5);
-    transition: transform 0.15s;
+    transition: transform 0.15s ease;
   }
 
   input[type='range'].seek-bar::-webkit-slider-thumb:hover {
     transform: scale(1.3);
   }
 
-  /* Volume bar */
+  input[type='range'].seek-bar::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #FFFFFF;
+    cursor: pointer;
+    border: 2px solid rgba(229, 9, 20, 0.5);
+  }
+
+  /* ── Volume Bar ── */
   input[type='range'].volume-bar {
     -webkit-appearance: none;
     appearance: none;
@@ -89,20 +176,143 @@
     border-radius: 2px;
     cursor: pointer;
     outline: none;
+    transition: height 0.15s ease;
+  }
+
+  input[type='range'].volume-bar:hover {
+    height: 4px;
   }
 
   input[type='range'].volume-bar::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 10px;
-    height: 10px;
+    width: 12px;
+    height: 12px;
     border-radius: 50%;
     background: #FFFFFF;
     cursor: pointer;
+    transition: transform 0.15s ease;
   }
 
-  /* Netflix-style button base */
-  .btn-netflix {
-    @apply inline-flex items-center justify-center gap-2 font-semibold transition-all duration-200 cursor-pointer select-none rounded-md;
+  input[type='range'].volume-bar::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+  }
+
+  input[type='range'].volume-bar::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #FFFFFF;
+    cursor: pointer;
+    border: none;
+  }
+
+  /* ── Glass Panel Effect ── */
+  .glass {
+    @apply bg-white/[0.03] border border-white/[0.06] backdrop-blur-xl;
+  }
+
+  .glass-dark {
+    @apply bg-black/60 border border-white/[0.06] backdrop-blur-2xl;
+  }
+
+  /* ── Card Base ── */
+  .card-base {
+    @apply bg-bg-card border border-border rounded-xl transition-all duration-250;
+  }
+
+  .card-hover {
+    @apply hover:border-border-bright hover:bg-bg-hover hover:shadow-card-hover;
+  }
+
+  /* ── Status Dot ── */
+  .status-live {
+    @apply inline-flex items-center gap-1.5 text-xs font-bold tracking-widest uppercase;
+  }
+
+  /* ── Shimmer Loading ── */
+  .shimmer {
+    background: linear-gradient(90deg,
+        rgba(255, 255, 255, 0.03) 0%,
+        rgba(255, 255, 255, 0.08) 50%,
+        rgba(255, 255, 255, 0.03) 100%);
+    background-size: 200% 100%;
+    animation: shimmer 2s infinite linear;
+  }
+
+  /* ── Netflix N-style Button base ── */
+  .btn-base {
+    @apply inline-flex items-center justify-center font-semibold rounded-md transition-all duration-250 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-brand/60 cursor-pointer select-none leading-none disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none;
+  }
+
+  /* ── Input Base ── */
+  .input-base {
+    @apply w-full bg-bg-surface border border-border rounded-md px-4 py-3 text-white text-sm placeholder-text-dim leading-none focus:outline-none focus:border-red-brand focus:shadow-input-focus hover:border-border-bright transition-all duration-250;
+  }
+
+  /* ── Divider ── */
+  .divider {
+    @apply h-px w-full bg-border;
+  }
+
+  /* ── Participant Badge ── */
+  .participant-badge {
+    @apply flex items-center gap-2.5 px-3 py-2 rounded-lg bg-bg-surface border border-border hover:border-border-bright hover:bg-bg-hover transition-all duration-200;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   UTILITIES LAYER — Micro-interaction helpers
+───────────────────────────────────────────────────────────────────────────── */
+@layer utilities {
+
+  /* ── Touch-friendly minimum tap targets ── */
+  .tap-target {
+    min-height: 44px;
+    min-width: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ── Hover Lift ── */
+  .hover-lift {
+    @apply transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0;
+  }
+
+  /* ── Press Effect ── */
+  .press-effect {
+    @apply transition-transform duration-150 active:scale-[0.97];
+  }
+
+  /* ── Text Gradient ── */
+  .text-gradient-red {
+    background: linear-gradient(135deg, #E50914 0%, #ff6b6b 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* ── Glow Text ── */
+  .text-glow {
+    text-shadow: 0 0 20px rgba(229, 9, 20, 0.4);
+  }
+
+  /* ── No scroll ── */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+
+  /* ── Truncate two lines ── */
+  .line-clamp-2 {
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 }

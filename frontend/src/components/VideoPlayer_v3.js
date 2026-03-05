@@ -42,9 +42,6 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [showControls, setShowControls] = useState(true);
-  const [hoverLocal, setHoverLocal] = useState(false);
-  const [hoverScreen, setHoverScreen] = useState(false);
-  const [hoverStop, setHoverStop] = useState(false);
 
   const [isPlaying, setIsPlaying] = useState(false);
   // We keep local time state only for the host to handle its own slider interaction smoothly
@@ -216,7 +213,7 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
     socket.on("user-list", handleUserList);
     socket.on("request-sync", handleRequestSync);
 
-    socket.emit("join-room", { roomId: cleanRoomId, username });
+    // Note: join-room is handled by the parent Room component before VideoPlayer mounts
 
     return () => {
       socket.off("stream-status", handleStreamStatus);
@@ -503,211 +500,150 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
   }, []);
 
   // ─────────────────────────────────────────────────────────────────────────
+  const seekPct = roomDuration > 0 ? (localSeekTime / roomDuration) * 100 : 0;
+  const volPct = (isMuted ? 0 : volume) * 100;
+
   return (
     <div
       ref={videoContainerRef}
       onMouseMove={handleMouseMove}
-      style={{
-        width: "100%",
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        background: "#000",
-        position: "relative",
-      }}
+      className="relative flex flex-col w-full h-full bg-black"
     >
-      {/* ── Netflix Toolbar ── */}
+      {/* ── Toolbar ── */}
       <div
-        style={{
-          padding: "6px 16px",
-          background: "#0A0A0A",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          fontSize: "0.75rem",
-          borderBottom: "1px solid #1a1a1a",
-          flexShrink: 0,
-          zIndex: 5,
-        }}
+        className="flex items-center justify-between gap-3 px-3 py-1.5 sm:px-4 sm:py-2
+                   bg-bg-base/95 backdrop-blur-md
+                   border-b border-border flex-shrink-0 z-10"
+        role="toolbar"
+        aria-label="Video controls toolbar"
       >
-        {/* Status indicator */}
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+        {/* Status indicator — hidden on very small mobile if idle */}
+        <div className="flex items-center gap-2 group" role="status" aria-live="polite">
           <div
             ref={statusDotRef}
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: "#E50914",
-              flexShrink: 0,
-            }}
+            className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-red-brand flex-shrink-0 shadow-[0_0_8px_rgba(229,9,20,0.5)]"
+            style={{ background: '#E50914' }}
+            aria-hidden="true"
           />
-          <span style={{ color: "#737373", fontFamily: "Inter, sans-serif", fontSize: "0.72rem" }}>Status:</span>
-          <span
-            ref={statusTextRef}
-            style={{ color: "#fff", fontWeight: "600", fontFamily: "Inter, sans-serif" }}
-          >
+          <span className="hidden xs:inline text-text-muted text-[10px] sm:text-xs">Status:</span>
+          <span ref={statusTextRef} className="text-white text-[10px] sm:text-xs font-semibold">
             Idle
           </span>
           {usingFallback && (
-            <span
-              style={{
-                marginLeft: 8,
-                fontSize: "0.65rem",
-                color: "#F40612",
-                border: "1px solid rgba(229,9,20,0.3)",
-                background: "rgba(229,9,20,0.08)",
-                padding: "2px 7px",
-                borderRadius: 4,
-                fontFamily: "Inter, sans-serif",
-                fontWeight: 600,
-              }}
-            >
-              Sync-only
+            <span className="ml-1 text-[9px] sm:text-[10px] text-red-brand border border-red-brand/30 bg-red-muted px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">
+              Fallback
             </span>
           )}
         </div>
 
-        {/* Controls */}
+        {/* Source controls */}
         {isStreaming ? (
           amIStreamer && (
             <button
               onClick={handleStopStreaming}
-              onMouseEnter={() => setHoverStop(true)}
-              onMouseLeave={() => setHoverStop(false)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "4px 10px",
-                fontSize: "0.7rem",
-                background: hoverStop ? "rgba(229,9,20,0.2)" : "rgba(229,9,20,0.1)",
-                color: "#E50914",
-                border: "1px solid rgba(229,9,20,0.3)",
-                borderRadius: 5,
-                cursor: "pointer",
-                fontFamily: "Inter, sans-serif",
-                fontWeight: 600,
-                transition: "all 0.2s",
-              }}
+              aria-label="Stop streaming"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5
+                         bg-red-muted hover:bg-red-brand/20 text-red-brand
+                         border border-red-brand/30 hover:border-red-brand/50
+                         rounded-md text-[10px] sm:text-xs font-bold uppercase tracking-wider
+                         transition-all duration-200
+                         focus:outline-none focus:ring-2 focus:ring-red-brand/50"
             >
-              <Square size={12} fill="#f87171" />
+              <Square size={10} fill="currentColor" aria-hidden="true" />
               Stop
             </button>
           )
         ) : (
-          <div style={{ display: "flex", gap: 8 }}>
+          <div className="flex gap-1.5 sm:gap-2">
             <input
               type="file"
               accept="video/*"
               onChange={handleFileChange}
-              style={{ display: "none" }}
+              className="sr-only"
               id="video-upload"
+              aria-label="Upload a local video file"
             />
             <label
               htmlFor="video-upload"
-              onMouseEnter={() => setHoverLocal(true)}
-              onMouseLeave={() => setHoverLocal(false)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "4px 10px",
-                fontSize: "0.7rem",
-                background: hoverLocal ? "#f40612" : "#E50914",
-                color: "#fff",
-                border: "none",
-                borderRadius: 5,
-                cursor: "pointer",
-                fontFamily: "Inter, sans-serif",
-                fontWeight: 700,
-                transition: "all 0.2s",
-              }}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5
+                         bg-red-brand hover:bg-red-hover text-white
+                         rounded-md text-[10px] sm:text-xs font-bold uppercase tracking-wider 
+                         cursor-pointer transition-all duration-200
+                         focus-within:ring-2 focus-within:ring-red-brand/50
+                         shadow-[0_4px_12px_rgba(229,9,20,0.2)]"
             >
-              <Upload size={12} />
-              Local File
+              <Upload size={11} aria-hidden="true" />
+              <span className="xs:inline">Local File</span>
             </label>
             <button
               onClick={startScreenShare}
-              onMouseEnter={() => setHoverScreen(true)}
-              onMouseLeave={() => setHoverScreen(false)}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                padding: "4px 10px",
-                fontSize: "0.7rem",
-                background: hoverScreen ? "#262626" : "#1a1a1a",
-                color: hoverScreen ? "#fff" : "#A3A3A3",
-                border: "1px solid #2a2a2a",
-                borderRadius: 5,
-                cursor: "pointer",
-                fontFamily: "Inter, sans-serif",
-                fontWeight: 600,
-                transition: "all 0.2s",
-              }}
+              aria-label="Share your screen"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5
+                         bg-bg-surface hover:bg-bg-hover text-text-secondary hover:text-white
+                         border border-border hover:border-border-bright
+                         rounded-md text-[10px] sm:text-xs font-semibold uppercase tracking-wider
+                         transition-all duration-200
+                         focus:outline-none focus:ring-2 focus:ring-white/20 shadow-sm"
             >
-              <MonitorPlay size={12} />
-              Screen Share
+              <MonitorPlay size={11} aria-hidden="true" />
+              <span className="hidden xs:inline">Screen Share</span>
+              <span className="xs:hidden">Screen</span>
             </button>
           </div>
         )}
       </div>
 
       {/* ── Video Area ── */}
-      <div
-        style={{
-          flex: 1,
-          position: "relative",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background: "#000",
-          overflow: "hidden",
-        }}
-      >
+      <div className="relative flex-1 flex items-center justify-center bg-black overflow-hidden">
         <video
           ref={videoRef}
           src={videoSource || undefined}
+          className="w-full object-contain select-none"
           style={{
-            width: "100%",
-            height: isFullscreen ? "100vh" : "auto",
-            maxHeight: isFullscreen ? "100vh" : "70vh",
-            objectFit: "contain",
+            height: isFullscreen ? '100dvh' : 'auto',
+            maxHeight: isFullscreen ? '100dvh' : '85vh',
           }}
-          controls={false} // Custom controls instead
+          controls={false}
           autoPlay
           playsInline
-          muted={isMuted} // host uses local muted state
+          muted={isMuted}
+          aria-label="Video player"
         />
 
-        {/* ── CineSync Control Bar ── */}
+        {/* Empty State / Standby */}
+        {!isStreaming && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center px-6">
+            <div className="w-16 h-16 rounded-2xl bg-bg-surface/50 border border-border/50 flex items-center justify-center mb-2">
+              <MonitorPlay size={32} className="text-text-dim opacity-40" />
+            </div>
+            <h3 className="text-white font-bold text-lg tracking-tight">Ready to Sync</h3>
+            <p className="text-text-muted text-sm max-w-[280px]">
+              Load a local video or share your screen to start the watch party.
+            </p>
+          </div>
+        )}
+
+        {/* ── Control Bar ── */}
         <div
+          className="absolute left-1/2 -translate-x-1/2
+                     flex flex-col gap-2.5 w-[calc(100%-1rem)] max-w-[920px]
+                     px-3 py-2.5 sm:px-5 sm:py-3.5
+                     bg-black/90 backdrop-blur-2xl
+                     rounded-xl border border-red-brand/15
+                     shadow-[0_-4px_40px_rgba(229,9,20,0.07),0_16px_48px_rgba(0,0,0,0.9)]
+                     transition-all duration-300 z-[100]"
           style={{
-            position: "absolute",
-            bottom: isFullscreen ? 24 : 16,
-            left: "50%",
-            transform: `translate(-50%, ${showControls ? "0" : "120px"})`,
-            width: "calc(100% - 32px)",
-            maxWidth: "920px",
-            padding: "14px 20px",
-            background: "rgba(0,0,0,0.92)",
-            backdropFilter: "blur(24px)",
-            WebkitBackdropFilter: "blur(24px)",
-            borderRadius: "10px",
-            border: "1px solid rgba(229,9,20,0.18)",
-            display: "flex",
-            flexDirection: "column",
-            gap: "10px",
-            transition: "transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s",
+            bottom: isFullscreen ? 24 : 12,
+            transform: `translateX(-50%) translateY(${showControls ? '0' : '150%'})`,
             opacity: showControls ? 1 : 0,
-            zIndex: 100,
-            boxShadow: "0 -4px 40px rgba(229,9,20,0.08), 0 16px 48px rgba(0,0,0,0.9)",
+            pointerEvents: showControls ? 'auto' : 'none',
           }}
+          role="group"
+          aria-label="Playback controls"
         >
-          {/* Row 1: CineSync Seek Bar (Host Only) */}
+          {/* Seek Bar — host only */}
           {amIStreamer && (
-            <div style={{ width: "100%", display: "flex", alignItems: "center", position: "relative" }}>
+            <div className="w-full flex items-center px-1">
               <input
                 type="range"
                 className="seek-bar"
@@ -718,66 +654,56 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
                 onChange={handleSeekChange}
                 onMouseUp={handleSeekEnd}
                 onTouchEnd={handleSeekEnd}
+                aria-label={`Seek: ${formatTime(localSeekTime)} of ${formatTime(roomDuration)}`}
+                aria-valuemin={0}
+                aria-valuemax={roomDuration || 100}
+                aria-valuenow={localSeekTime}
                 style={{
-                  width: "100%",
-                  background: `linear-gradient(to right, #E50914 0%, #E50914 ${roomDuration > 0 ? (localSeekTime / roomDuration) * 100 : 0
-                    }%, #2a2a2a ${roomDuration > 0 ? (localSeekTime / roomDuration) * 100 : 0
-                    }%, #2a2a2a 100%)`,
+                  width: '100%',
+                  background: `linear-gradient(to right, #E50914 0%, #E50914 ${seekPct}%, #2a2a2a ${seekPct}%, #2a2a2a 100%)`,
                 }}
               />
             </div>
           )}
 
-          {/* Row 2: Controls Row */}
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            {/* Left side: Play, Volume, Time */}
-            <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
-              {/* Play/Pause Button (Host Only) */}
+          {/* Controls Row */}
+          <div className="flex items-center justify-between">
+            {/* Left: Play + Volume + Time */}
+            <div className="flex items-center gap-2.5 sm:gap-4">
+              {/* Play/Pause — host only */}
               {amIStreamer && (
                 <button
                   onClick={togglePlay}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    color: "white",
-                  }}
+                  aria-label={isPlaying ? 'Pause' : 'Play'}
+                  className="p-1 flex items-center text-white hover:text-white/80
+                             transition-colors focus:outline-none rounded"
                 >
                   {isPlaying ? (
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                       <path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
                     </svg>
                   ) : (
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                       <path d="M8 5v14l11-7z" />
                     </svg>
                   )}
                 </button>
               )}
 
-              {/* Volume Control */}
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              {/* Volume — hidden on smaller mobile to save space */}
+              <div className="hidden xs:flex items-center gap-2">
                 <button
                   onClick={toggleMute}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: 0,
-                    display: "flex",
-                    alignItems: "center",
-                    color: "white",
-                  }}
+                  aria-label={isMuted || volume === 0 ? 'Unmute' : 'Mute'}
+                  className="flex items-center text-white hover:text-white/80
+                             transition-colors focus:outline-none rounded"
                 >
                   {isMuted || volume === 0 ? (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                       <path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3L3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4L9.91 6.09 12 8.18V4z" />
                     </svg>
                   ) : (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                       <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
                     </svg>
                   )}
@@ -790,51 +716,34 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
                   step="0.05"
                   value={isMuted ? 0 : volume}
                   onChange={handleLocalVolumeChange}
+                  aria-label="Volume"
                   style={{
-                    width: "70px",
-                    background: `linear-gradient(to right, #E50914 ${(isMuted ? 0 : volume) * 100}%, #2a2a2a ${(isMuted ? 0 : volume) * 100}%)`,
+                    width: '60px',
+                    background: `linear-gradient(to right, #E50914 ${volPct}%, #2a2a2a ${volPct}%)`,
                   }}
                 />
               </div>
 
-              {/* Time Display */}
-              <div style={{ color: "white", fontSize: "0.85rem", fontWeight: "400", opacity: 0.9 }}>
-                {formatTime(roomTime)} / {formatTime(roomDuration)}
+              {/* Time */}
+              <div className="text-white/90 text-xs sm:text-sm tabular-nums font-medium select-none ml-1">
+                {formatTime(roomTime)} <span className="text-white/40 mx-0.5">/</span> {formatTime(roomDuration)}
               </div>
             </div>
 
-            {/* Right side: Placeholder icons and Fullscreen */}
-            <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
-              {/* CC Icon (Placeholder) */}
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.5, cursor: "not-allowed" }}>
-                <path d="M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z" />
-              </svg>
-
-              {/* Settings Icon (Placeholder) */}
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style={{ opacity: 0.5, cursor: "not-allowed" }}>
-                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z" />
-              </svg>
-
-              {/* Fullscreen Toggle */}
+            {/* Right: Fullscreen */}
+            <div className="flex items-center gap-2 sm:gap-4">
               <button
                 onClick={toggleFullscreen}
-                style={{
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  padding: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  color: "white",
-                }}
-                title="Toggle Fullscreen"
+                aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                className="p-1 flex items-center text-white hover:text-white/80
+                           transition-colors focus:outline-none rounded"
               >
                 {isFullscreen ? (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M5 16h3v3h2v-5H5v2zm3-8H5v2h5V5H8v3zm6 11h2v-3h3v-2h-5v5zm2-11V5h-2v5h5V8h-3z" />
                   </svg>
                 ) : (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                     <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z" />
                   </svg>
                 )}
@@ -843,160 +752,61 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
           </div>
         </div>
 
-        {/* Viewer "Synced" badge (only top-right) */}
-        {/* Viewer - synced badge */}
+        {/* LIVE badge — viewer, when controls hidden */}
         {!amIStreamer && isStreaming && !showControls && (
           <div
-            style={{
-              position: "absolute",
-              top: 12,
-              right: 12,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "4px 10px",
-              background: "rgba(229,9,20,0.12)",
-              color: "#E50914",
-              fontSize: "0.65rem",
-              borderRadius: 4,
-              border: "1px solid rgba(229,9,20,0.3)",
-              pointerEvents: "none",
-              fontFamily: "Inter, sans-serif",
-              fontWeight: 700,
-              letterSpacing: "0.06em",
-            }}
+            className="absolute top-3 right-3 flex items-center gap-1.5
+                       px-2.5 py-1 bg-red-muted border border-red-brand/30
+                       text-red-brand text-[10px] font-bold tracking-widest uppercase
+                       rounded pointer-events-none"
+            aria-label="Live stream active"
           >
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#E50914", display: "block" }} />
-            ● LIVE
+            <span className="w-1.5 h-1.5 rounded-full bg-red-brand animate-pulse-red" aria-hidden="true" />
+            LIVE
           </div>
         )}
 
-        {/* Host — viewer count badge */}
+        {/* Host viewer count badge */}
         {amIStreamer && userList.length > 1 && (
           <div
-            style={{
-              position: "absolute",
-              top: 12,
-              left: 12,
-              display: "flex",
-              alignItems: "center",
-              gap: 6,
-              padding: "4px 10px",
-              background: "rgba(229,9,20,0.08)",
-              color: "#E50914",
-              fontSize: "0.65rem",
-              borderRadius: 4,
-              border: "1px solid rgba(229,9,20,0.25)",
-              pointerEvents: "none",
-              fontFamily: "Inter, sans-serif",
-              fontWeight: 700,
-              letterSpacing: "0.04em",
-            }}
+            className="absolute top-3 left-3 flex items-center gap-1.5
+                       px-2.5 py-1 bg-red-muted border border-red-brand/25
+                       text-red-brand text-[10px] font-bold tracking-wide uppercase
+                       rounded pointer-events-none"
+            aria-live="polite"
+            aria-label={`Hosting for ${userList.length - 1} viewer${userList.length !== 2 ? 's' : ''}`}
           >
-            🎬 Host · {userList.length - 1} viewer{userList.length !== 2 ? "s" : ""}
+            🎬 Host · {userList.length - 1} viewer{userList.length !== 2 ? 's' : ''}
           </div>
         )}
 
         {/* Click-to-play overlay */}
         {needsInteraction && (
-          <div
+          <button
             onClick={handleClickToPlay}
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-              alignItems: "center",
-              background: "rgba(0,0,0,0.92)",
-              cursor: "pointer",
-              backdropFilter: "blur(12px)",
-              WebkitBackdropFilter: "blur(12px)",
-              zIndex: 10,
-              gap: 20,
-            }}
+            aria-label="Click to start playback (browser requires interaction before audio)"
+            className="absolute inset-0 flex flex-col items-center justify-center gap-5
+                       bg-black/90 backdrop-blur-lg cursor-pointer z-10
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-red-brand/60"
           >
             <div
-              style={{
-                width: 88,
-                height: 88,
-                borderRadius: "50%",
-                background: "#E50914",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 0 40px rgba(229,9,20,0.6), 0 8px 32px rgba(0,0,0,0.6)",
-              }}
+              className="w-20 h-20 rounded-full bg-red-brand flex items-center justify-center
+                         shadow-red-lg"
+              aria-hidden="true"
             >
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="white">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="white">
                 <path d="M8 5v14l11-7z" />
               </svg>
             </div>
-            <div style={{ textAlign: "center" }}>
-              <p
-                style={{
-                  color: "#f8fafc",
-                  fontSize: "1.1rem",
-                  fontWeight: 700,
-                  fontFamily: "Outfit, sans-serif",
-                  marginBottom: 6,
-                }}
-              >
-                Resume
-              </p>
-              <p
-                style={{
-                  color: "#94a3b8",
-                  fontSize: "0.8rem",
-                  fontFamily: "Inter, sans-serif",
-                  maxWidth: "75%",
-                  margin: "0 auto",
-                }}
-              >
-                Browser security requires a click before audio plays.
+            <div className="text-center">
+              <p className="text-white font-bold text-lg mb-1.5">Resume Playback</p>
+              <p className="text-text-secondary text-sm max-w-[280px] leading-relaxed">
+                Browser security requires a click before audio can play.
               </p>
             </div>
-          </div>
+          </button>
         )}
 
-        {/* No stream idle placeholder */}
-        {!isStreaming && (
-          <div
-            style={{
-              position: "absolute",
-              inset: 0,
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-              alignItems: "center",
-              pointerEvents: "none",
-              gap: 16,
-            }}
-          >
-            <div
-              style={{
-                width: 72,
-                height: 72,
-                borderRadius: 20,
-                background: "rgba(99,102,241,0.08)",
-                border: "1px solid rgba(99,102,241,0.2)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <MonitorPlay size={36} color="rgba(229,9,20,0.4)" strokeWidth={1.5} />
-            </div>
-            <div style={{ textAlign: "center" }}>
-              <p style={{ fontSize: "0.9rem", color: "#94a3b8", fontFamily: "Outfit, sans-serif", fontWeight: 600, marginBottom: 4 }}>
-                No content streaming
-              </p>
-              <p style={{ fontSize: "0.75rem", color: "#475569", fontFamily: "Inter, sans-serif" }}>
-                Use the toolbar above to load a file or share your screen
-              </p>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
