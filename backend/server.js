@@ -285,6 +285,33 @@ io.on("connection", (socket) => {
     socket.to(id).emit("volume-change", { muted, volume });
   });
 
+  // ── Admin: Kick User ───────────────────────────────────────────────────────
+  socket.on("kick-user", ({ roomId, targetId }) => {
+    if (!roomId || !targetId) return;
+    const id = roomId.trim().toUpperCase();
+    const room = rooms[id];
+
+    // Only streamer can kick
+    if (!room || room.streamer !== socket.id || targetId === socket.id) return;
+
+    const targetUser = room.members.get(targetId);
+    if (targetUser) {
+      console.log(`[KICK] Host ${socket.id} kicked ${targetUser.username} (${targetId}) from room ${id}`);
+
+      // Notify the target user specifically
+      io.to(targetId).emit("kicked", { reason: "The host has removed you from the theater." });
+
+      // Force them to leave the socket room
+      const targetSocket = io.sockets.sockets.get(targetId);
+      if (targetSocket) {
+        targetSocket.leave(id);
+      }
+
+      room.members.delete(targetId);
+      broadcastUserList(id);
+    }
+  });
+
   // ── RTT measurement ───────────────────────────────────────────────────────
   socket.on("ping-rtt", (clientTime) => {
     socket.emit("pong-rtt", clientTime);

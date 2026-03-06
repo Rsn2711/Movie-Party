@@ -5,6 +5,7 @@ import { X, Copy, LogOut, MessageSquare, Check, ChevronRight, Users } from 'luci
 import socket from '../socket';
 import VideoPlayer from '../components/VideoPlayer_v3';
 import Chat from '../components/Chat';
+import MembersList from '../components/MembersList';
 import Button from '../components/ui/Button';
 import { CineSyncLogo } from '../App';
 
@@ -133,7 +134,7 @@ function JoinModal({ roomId, onJoin, onBack }) {
 /* ────────────────────────────────────────────────────────────────
    Room Header Bar
 ──────────────────────────────────────────────────────────────── */
-function RoomHeader({ roomId, username, chatOpen, onToggleChat, onCopyCode, onLeave, copied }) {
+function RoomHeader({ roomId, username, chatOpen, activeTab, onTogglePanel, onCopyCode, onLeave, copied, userCount }) {
   return (
     <header
       className="flex items-center gap-2 sm:gap-3 px-3 sm:px-4 h-12 sm:h-14
@@ -151,46 +152,44 @@ function RoomHeader({ roomId, username, chatOpen, onToggleChat, onCopyCode, onLe
         <CineSyncLogo size="sm" />
       </button>
 
-      {/* Room code pill — more compact on mobile */}
-      <button
-        onClick={onCopyCode}
-        aria-label={`Copy room code ${roomId}. ${copied ? 'Copied!' : 'Click to copy'}`}
-        className="flex items-center gap-1.5 sm:gap-2 px-2 py-1 sm:px-2.5 sm:py-1.5 bg-bg-card
-                   border border-border hover:border-border-bright rounded-lg
-                   transition-all duration-200 group min-h-[32px] sm:min-h-[36px] flex-shrink-0"
-      >
-        <span className="hidden xs:inline text-[9px] sm:text-2xs text-text-muted uppercase tracking-widest">Room</span>
-        <span className="text-[10px] sm:text-xs font-black text-white tracking-widest">{roomId}</span>
-        {copied ? (
-          <Check size={10} className="text-green-400 flex-shrink-0" aria-hidden="true" />
-        ) : (
-          <Copy
-            size={10}
-            className="text-text-dim group-hover:text-text-secondary flex-shrink-0 transition-colors"
-            aria-hidden="true"
-          />
-        )}
-      </button>
-
       {/* Spacer */}
       <div className="flex-1 min-w-0" />
 
       {/* Username — only on large mobile/desktop */}
-      <span className="hidden sm:flex items-center gap-2 text-xs text-text-muted flex-shrink-0">
+      <span className="hidden sm:flex items-center gap-2 text-xs text-text-muted flex-shrink-0 mr-2">
         <span className="w-2 h-2 rounded-full bg-green-500" aria-hidden="true" />
         <span className="max-w-[80px] truncate text-text-secondary font-medium">{username}</span>
       </span>
 
+      {/* Members toggle */}
+      <button
+        onClick={() => onTogglePanel('members')}
+        aria-label="View members"
+        className={`flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-xs font-semibold
+                    border transition-all duration-200 min-h-[32px] sm:min-h-[36px] flex-shrink-0
+                    focus:outline-none focus:ring-2 focus:ring-red-brand/50
+                    ${chatOpen && activeTab === 'members'
+            ? 'bg-red-brand border-red-brand text-white shadow-[0_0_12px_rgba(229,9,20,0.3)]'
+            : 'bg-bg-card border-border hover:border-border-bright text-text-muted hover:text-white'
+          }`}
+      >
+        <Users size={13} aria-hidden="true" />
+        <span className="hidden sm:inline">Members</span>
+        {userCount > 0 && (
+          <span className="bg-red-brand/10 text-red-brand px-1 rounded text-[10px] ml-0.5">{userCount}</span>
+        )}
+      </button>
+
       {/* Chat toggle */}
       <button
-        onClick={onToggleChat}
+        onClick={() => onTogglePanel('chat')}
         aria-label={chatOpen ? 'Collapse chat' : 'Open chat'}
         aria-pressed={chatOpen}
         className={`flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-xs font-semibold
                     border transition-all duration-200 min-h-[32px] sm:min-h-[36px] flex-shrink-0
                     focus:outline-none focus:ring-2 focus:ring-red-brand/50
-                    ${chatOpen
-            ? 'bg-red-muted border-red-brand/25 text-red-brand'
+                    ${chatOpen && activeTab === 'chat'
+            ? 'bg-red-brand border-red-brand text-white shadow-[0_0_12px_rgba(229,9,20,0.3)]'
             : 'bg-bg-card border-border hover:border-border-bright text-text-muted hover:text-white'
           }`}
       >
@@ -247,42 +246,60 @@ function ChatRestoreButton({ onClick }) {
 /* ────────────────────────────────────────────────────────────────
    Chat Panel
 ──────────────────────────────────────────────────────────────── */
-function ChatPanel({ roomId, username, onClose }) {
+function ChatPanel({ roomId, username, onClose, activeTab, onTabChange, userList, streamerId, onKick }) {
   return (
     <>
       {/* ── Desktop side panel (md+) ── */}
       <motion.aside
         initial={{ width: 0, opacity: 0 }}
-        animate={{ width: 'clamp(280px, 320px, 35vw)', opacity: 1 }}
+        animate={{ width: 'clamp(300px, 340px, 35vw)', opacity: 1 }}
         exit={{ width: 0, opacity: 0 }}
         transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
         className="hidden md:flex flex-shrink-0 border-l border-border overflow-hidden"
-        aria-label="Live chat"
+        aria-label="Live interaction panel"
       >
-        <div className="flex flex-col h-full w-[320px]">
-          {/* Panel close button */}
-          <button
-            onClick={onClose}
-            aria-label="Collapse chat panel"
-            className="flex items-center justify-between px-4 py-2.5
-                       border-b border-border hover:bg-bg-card
-                       transition-colors group focus:outline-none
-                       focus-visible:ring-inset focus-visible:ring-1 focus-visible:ring-red-brand/30"
-          >
-            <div className="flex items-center gap-2">
-              <Users size={12} className="text-text-dim" aria-hidden="true" />
-              <span className="text-xs text-text-muted group-hover:text-text-secondary transition-colors">
-                Chat
+        <div className="flex flex-col h-full w-[340px] bg-bg-modal">
+          {/* Tabs header */}
+          <div className="flex items-center bg-bg-base/50 p-1 border-b border-border">
+            <button
+              onClick={() => onTabChange('chat')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all
+                          ${activeTab === 'chat'
+                  ? 'bg-bg-surface text-white shadow-sm'
+                  : 'text-text-muted hover:text-text-secondary'}`}
+            >
+              <MessageSquare size={14} />
+              Chat
+            </button>
+            <button
+              onClick={() => onTabChange('members')}
+              className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all
+                          ${activeTab === 'members'
+                  ? 'bg-bg-surface text-white shadow-sm'
+                  : 'text-text-muted hover:text-text-secondary'}`}
+            >
+              <Users size={14} />
+              Members
+              <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${activeTab === 'members' ? 'bg-red-brand text-white' : 'bg-bg-surface text-text-dim'}`}>
+                {userList.length}
               </span>
-            </div>
-            <ChevronRight
-              size={13}
-              className="text-text-dim rotate-180 group-hover:text-text-secondary transition-colors"
-              aria-hidden="true"
-            />
-          </button>
+            </button>
+            <button
+              onClick={onClose}
+              className="p-2 text-text-dim hover:text-white transition-colors"
+              title="Close panel"
+            >
+              <ChevronRight size={14} className="rotate-180" />
+            </button>
+          </div>
 
-          <Chat roomId={roomId} username={username} />
+          <div className="flex-1 overflow-hidden">
+            {activeTab === 'chat' ? (
+              <Chat roomId={roomId} username={username} />
+            ) : (
+              <MembersList users={userList} streamerId={streamerId} currentUserId={socket.id} onKick={onKick} />
+            )}
+          </div>
         </div>
       </motion.aside>
 
@@ -295,36 +312,50 @@ function ChatPanel({ roomId, username, onClose }) {
         className="md:hidden fixed inset-x-0 bottom-0 z-50
                    flex flex-col bg-bg-modal border-t border-border rounded-t-2xl
                    overflow-hidden"
-        style={{ maxHeight: '75vh' }}
+        style={{ maxHeight: '85vh' }}
         role="dialog"
         aria-modal="true"
-        aria-label="Live chat"
+        aria-label="Live interaction"
       >
         {/* Mobile sheet drag handle */}
         <button
           onClick={onClose}
-          aria-label="Close chat"
-          className="flex flex-col items-center pt-3 pb-2 gap-1.5
-                     focus:outline-none"
+          aria-label="Close panel"
+          className="flex flex-col items-center pt-3 pb-2 gap-1.5 focus:outline-none"
         >
           <div className="w-10 h-1 bg-white/20 rounded-full" aria-hidden="true" />
         </button>
 
-        <div className="flex items-center justify-between px-4 pb-2">
-          <span className="text-sm font-semibold text-white">Live Chat</span>
+        <div className="flex items-center justify-between px-4 pb-2 border-b border-border/50">
+          <div className="flex bg-bg-surface/50 p-1 rounded-xl w-full max-w-[240px]">
+            <button
+              onClick={() => onTabChange('chat')}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${activeTab === 'chat' ? 'bg-bg-surface text-white' : 'text-text-muted'}`}
+            >
+              Chat
+            </button>
+            <button
+              onClick={() => onTabChange('members')}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${activeTab === 'members' ? 'bg-bg-surface text-white' : 'text-text-muted'}`}
+            >
+              Members ({userList.length})
+            </button>
+          </div>
           <button
             onClick={onClose}
-            aria-label="Close chat"
-            className="p-1.5 rounded-lg text-text-muted hover:text-white hover:bg-white/[0.06]
-                       transition-all duration-200 focus:outline-none
-                       focus-visible:ring-2 focus-visible:ring-white/30"
+            aria-label="Close panel"
+            className="p-2 rounded-xl text-text-muted hover:text-white hover:bg-white/[0.1] transition-all"
           >
-            <X size={14} />
+            <X size={18} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-hidden">
-          <Chat roomId={roomId} username={username} />
+        <div className="flex-1 overflow-hidden" style={{ height: '60vh' }}>
+          {activeTab === 'chat' ? (
+            <Chat roomId={roomId} username={username} />
+          ) : (
+            <MembersList users={userList} streamerId={streamerId} currentUserId={socket.id} onKick={onKick} />
+          )}
         </div>
       </motion.div>
 
@@ -352,9 +383,50 @@ export default function Room() {
   const [username, setUsername] = useState('');
   const [ready, setReady] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState('chat');
+  const [userList, setUserList] = useState([]);
+  const [streamerId, setStreamerId] = useState(null);
   const [copied, setCopied] = useState(false);
 
   const cleanRoomId = roomId?.trim().toUpperCase() ?? '';
+
+  // ── Room Events ──
+  useEffect(() => {
+    if (!ready || !cleanRoomId) return;
+
+    const handleUserList = (list) => setUserList(list);
+    const handleStreamStatus = ({ streamerId: id }) => setStreamerId(id);
+    const handleStreamStarted = ({ streamerId: id }) => setStreamerId(id);
+    const handleStreamStopped = () => setStreamerId(null);
+
+    socket.on('user-list', handleUserList);
+    socket.on('stream-status', handleStreamStatus);
+    socket.on('stream-started', handleStreamStarted);
+    socket.on('stream-stopped', handleStreamStopped);
+
+    return () => {
+      socket.off('user-list', handleUserList);
+      socket.off('stream-status', handleStreamStatus);
+      socket.off('stream-started', handleStreamStarted);
+      socket.off('stream-stopped', handleStreamStopped);
+    };
+  }, [ready, cleanRoomId]);
+
+  // ── Global Security: Kicked Event ──
+  useEffect(() => {
+    const onKicked = ({ reason }) => {
+      alert(reason || "You have been removed from the room.");
+      // Force immediate exit
+      setReady(false);
+      navigate('/', { replace: true });
+      window.location.reload(); // Hard refresh to clear any socket state/room joining
+    };
+
+    socket.on('kicked', onKicked);
+    return () => {
+      socket.off('kicked', onKicked);
+    };
+  }, [navigate]);
 
   // On mobile, chat starts closed to maximize video real estate
   useEffect(() => {
@@ -391,7 +463,21 @@ export default function Room() {
   }, [cleanRoomId]);
 
   const handleLeave = useCallback(() => navigate('/'), [navigate]);
-  const toggleChat = useCallback(() => setChatOpen(o => !o), []);
+
+  const handleKick = useCallback((targetId, targetName) => {
+    if (window.confirm(`Are you sure you want to remove ${targetName} from the room?`)) {
+      socket.emit('kick-user', { roomId: cleanRoomId, targetId });
+    }
+  }, [cleanRoomId]);
+
+  const togglePanel = useCallback((tab) => {
+    if (chatOpen && activeTab === tab) {
+      setChatOpen(false);
+    } else {
+      setChatOpen(true);
+      setActiveTab(tab);
+    }
+  }, [chatOpen, activeTab]);
 
   /* ── Join screen ── */
   if (!ready) {
@@ -412,10 +498,12 @@ export default function Room() {
         roomId={cleanRoomId}
         username={username}
         chatOpen={chatOpen}
-        onToggleChat={toggleChat}
+        activeTab={activeTab}
+        onTogglePanel={togglePanel}
         onCopyCode={copyCode}
         onLeave={handleLeave}
         copied={copied}
+        userCount={userList.length}
       />
 
       {/* ── Content ── */}
@@ -436,14 +524,19 @@ export default function Room() {
             <ChatPanel
               roomId={roomId}
               username={username}
-              onClose={toggleChat}
+              onClose={() => setChatOpen(false)}
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              userList={userList}
+              streamerId={streamerId}
+              onKick={handleKick}
             />
           )}
         </AnimatePresence>
 
         {/* Collapsed chat restore button (desktop only) */}
         {!chatOpen && (
-          <ChatRestoreButton onClick={toggleChat} />
+          <ChatRestoreButton onClick={() => togglePanel(activeTab)} />
         )}
       </div>
     </div>

@@ -21,7 +21,7 @@ import React, {
 import socket from "../socket";
 import { useWebRTC } from "../hooks/useWebRTC";
 import { useVideoSync } from "../hooks/useVideoSync";
-import { MonitorPlay, Upload, Square } from "lucide-react";
+import { MonitorPlay, Upload, Square, Copy, Check } from "lucide-react";
 
 export default function VideoPlayer({ roomId, username = "Viewer" }) {
   const videoRef = useRef(null);
@@ -48,6 +48,7 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
   // Viewers will strictly use roomTime from the sync hook.
   const [localSeekTime, setLocalSeekTime] = useState(0);
   const [isSeeking, setIsSeeking] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const cleanRoomId = useMemo(
     () => (roomId ? roomId.trim().toUpperCase() : ""),
@@ -140,6 +141,31 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
       video.onloadedmetadata = null;
     };
   }, [remoteStream, amIStreamer, setStatus]);
+
+  // ── Sync internal isPlaying state with the actual video element ──────────
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const syncPlaybackState = () => {
+      setIsPlaying(!video.paused);
+    };
+
+    video.addEventListener("play", syncPlaybackState);
+    video.addEventListener("playing", syncPlaybackState);
+    video.addEventListener("pause", syncPlaybackState);
+    video.addEventListener("ended", syncPlaybackState);
+
+    // Initial sync
+    syncPlaybackState();
+
+    return () => {
+      video.removeEventListener("play", syncPlaybackState);
+      video.removeEventListener("playing", syncPlaybackState);
+      video.removeEventListener("pause", syncPlaybackState);
+      video.removeEventListener("ended", syncPlaybackState);
+    };
+  }, [isStreaming, streamerId]);
 
   // ── Update status when peer connection status changes ─────────────────────
   useEffect(() => {
@@ -235,6 +261,38 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
         return;
       }
 
+      // ── Host-side video event listeners: set up IMMEDIATELY ──
+      // This ensures the play/pause button state is updated without waiting for WebRTC tracks.
+      let lastPlayState = null;
+
+      videoEl.onplay = () => {
+        setIsPlaying(true);
+        if (lastPlayState === "playing") return;
+        lastPlayState = "playing";
+        emitPlay();
+      };
+
+      videoEl.onpause = () => {
+        setIsPlaying(false);
+        if (lastPlayState === "paused") return;
+        lastPlayState = "paused";
+        emitPause();
+      };
+
+      videoEl.onseeked = () => {
+        emitSeek(videoEl.currentTime);
+      };
+
+      videoEl.onvolumechange = () => {
+        emitVolumeChange({ muted: videoEl.muted, volume: videoEl.volume });
+      };
+
+      // Force initial state sync
+      setIsPlaying(!videoEl.paused);
+      setLocalSeekTime(videoEl.currentTime);
+      videoEl.volume = volume;
+      videoEl.muted = isMuted;
+
       // Wait 200 ms after play() so the decoder produces live track frames
       // before we hand the stream to RTCPeerConnection.
       setTimeout(() => {
@@ -255,10 +313,6 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
         const videoTracks = stream.getVideoTracks();
         const audioTracks = stream.getAudioTracks();
 
-        if (audioTracks.length === 0) {
-          console.warn("[VideoPlayer] No audio track captured (file may have no audio, or browser restriction).");
-        }
-
         // Hint the browser codec selection: "motion" is better for video files
         videoTracks.forEach((t) => { try { t.contentHint = "motion"; } catch (_) { } });
         audioTracks.forEach((t) => { try { t.contentHint = "music"; } catch (_) { } });
@@ -267,46 +321,9 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
         socket.emit("start-stream", cleanRoomId);
         setStatus("Hosting File", true);
         startHeartbeat();
-
-        // HOST-side video event listeners
-        let lastPlayState = null;
-
-        videoEl.onplay = () => {
-          setIsPlaying(true);
-          if (lastPlayState === "playing") return;
-          lastPlayState = "playing";
-          emitPlay();
-        };
-
-        videoEl.onpause = () => {
-          setIsPlaying(false);
-          if (lastPlayState === "paused") return;
-          lastPlayState = "paused";
-          emitPause();
-        };
-
-        videoEl.onseeked = () => {
-          emitSeek(videoEl.currentTime);
-        };
-
-        videoEl.onvolumechange = () => {
-          emitVolumeChange({ muted: videoEl.muted, volume: videoEl.volume });
-        };
-
-        // Initial duration for host state
-        setLocalSeekTime(videoEl.currentTime);
-
-        // — Initial Volume —
-        videoEl.volume = volume;
-        videoEl.muted = isMuted;
-
-        // — Autoplay —
-        // The user wants the video to automatically play.
-        // We previously paused it here; now we let it continue playing.
-        // videoEl.pause(); 
       }, 200);
     },
-    [cleanRoomId, startStream, startHeartbeat, emitPlay, emitPause, emitSeek, emitVolumeChange, setStatus]
+    [cleanRoomId, startStream, startHeartbeat, emitPlay, emitPause, emitSeek, emitVolumeChange, setStatus, volume, isMuted]
   );
 
   // ── File input handler ────────────────────────────────────────────────────
@@ -357,7 +374,9 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
       const video = videoRef.current;
       if (video) {
         video.srcObject = stream;
-        video.play().catch(() => { });
+        video.play()
+          .then(() => setIsPlaying(true))
+          .catch(() => { });
       }
 
       // Detect when user stops screen share via browser UI
@@ -464,6 +483,14 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
     }
   }, [isMuted, volume]);
 
+  const handleCopy = useCallback(() => {
+    if (!cleanRoomId) return;
+    navigator.clipboard.writeText(cleanRoomId).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [cleanRoomId]);
+
   const formatTime = (seconds) => {
     if (!seconds) return "0:00";
     const h = Math.floor(seconds / 3600);
@@ -536,61 +563,53 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
           )}
         </div>
 
-        {/* Source controls */}
-        {isStreaming ? (
-          amIStreamer && (
+        {/* Center/Right controls: Room ID & Stop Button */}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Room code pill */}
+          <button
+            onClick={handleCopy}
+            aria-label={`Copy room code ${cleanRoomId}. ${copied ? "Copied!" : "Click to copy"}`}
+            className="flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 
+                       bg-bg-surface border border-border hover:border-border-bright 
+                       rounded-lg transition-all duration-200 group min-h-[32px] sm:min-h-[36px]"
+          >
+            <span className="hidden xs:inline text-[10px] sm:text-xs text-text-muted font-bold uppercase tracking-widest">
+              Room
+            </span>
+            <span className="text-xs sm:text-sm font-black text-white tracking-widest">
+              {cleanRoomId}
+            </span>
+            {copied ? (
+              <Check
+                size={12}
+                className="text-green-500 flex-shrink-0"
+                aria-hidden="true"
+              />
+            ) : (
+              <Copy
+                size={12}
+                className="text-text-dim group-hover:text-text-secondary flex-shrink-0 transition-colors"
+                aria-hidden="true"
+              />
+            )}
+          </button>
+
+          {isStreaming && amIStreamer && (
             <button
               onClick={handleStopStreaming}
               aria-label="Stop streaming"
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5
                          bg-red-muted hover:bg-red-brand/20 text-red-brand
                          border border-red-brand/30 hover:border-red-brand/50
-                         rounded-md text-[10px] sm:text-xs font-bold uppercase tracking-wider
-                         transition-all duration-200
+                         rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider
+                         transition-all duration-200 min-h-[32px] sm:min-h-[36px]
                          focus:outline-none focus:ring-2 focus:ring-red-brand/50"
             >
-              <Square size={10} fill="currentColor" aria-hidden="true" />
+              <Square size={11} fill="currentColor" aria-hidden="true" />
               Stop
             </button>
-          )
-        ) : (
-          <div className="flex gap-1.5 sm:gap-2">
-            <input
-              type="file"
-              accept="video/*"
-              onChange={handleFileChange}
-              className="sr-only"
-              id="video-upload"
-              aria-label="Upload a local video file"
-            />
-            <label
-              htmlFor="video-upload"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5
-                         bg-red-brand hover:bg-red-hover text-white
-                         rounded-md text-[10px] sm:text-xs font-bold uppercase tracking-wider 
-                         cursor-pointer transition-all duration-200
-                         focus-within:ring-2 focus-within:ring-red-brand/50
-                         shadow-[0_4px_12px_rgba(229,9,20,0.2)]"
-            >
-              <Upload size={11} aria-hidden="true" />
-              <span className="xs:inline">Local File</span>
-            </label>
-            <button
-              onClick={startScreenShare}
-              aria-label="Share your screen"
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5
-                         bg-bg-surface hover:bg-bg-hover text-text-secondary hover:text-white
-                         border border-border hover:border-border-bright
-                         rounded-md text-[10px] sm:text-xs font-semibold uppercase tracking-wider
-                         transition-all duration-200
-                         focus:outline-none focus:ring-2 focus:ring-white/20 shadow-sm"
-            >
-              <MonitorPlay size={11} aria-hidden="true" />
-              <span className="hidden xs:inline">Screen Share</span>
-              <span className="xs:hidden">Screen</span>
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {/* ── Video Area ── */}
@@ -598,10 +617,17 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
         <video
           ref={videoRef}
           src={videoSource || undefined}
-          className="w-full object-contain select-none"
+          onClick={(e) => {
+            // Only for host, only on desktop (devices with a mouse)
+            if (amIStreamer && window.matchMedia("(pointer: fine)").matches) {
+              togglePlay();
+            }
+          }}
+          className={`w-full object-contain select-none ${amIStreamer ? "cursor-pointer" : ""
+            }`}
           style={{
-            height: isFullscreen ? '100dvh' : 'auto',
-            maxHeight: isFullscreen ? '100dvh' : '85vh',
+            height: isFullscreen ? "100dvh" : "auto",
+            maxHeight: isFullscreen ? "100dvh" : "85vh",
           }}
           controls={false}
           autoPlay
@@ -612,14 +638,52 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
 
         {/* Empty State / Standby */}
         {!isStreaming && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-center px-6">
-            <div className="w-16 h-16 rounded-2xl bg-bg-surface/50 border border-border/50 flex items-center justify-center mb-2">
-              <MonitorPlay size={32} className="text-text-dim opacity-40" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 text-center px-6 z-20">
+            {/* Input buttons area */}
+            <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
+              <input
+                type="file"
+                accept="video/*"
+                onChange={handleFileChange}
+                className="sr-only"
+                id="video-upload"
+              />
+              <label
+                htmlFor="video-upload"
+                className="flex items-center gap-3 px-8 py-4
+                           bg-red-brand hover:bg-neutral-800 text-white
+                           rounded-2xl text-base font-bold uppercase tracking-widest
+                           cursor-pointer transition-all duration-300
+                           focus-within:ring-4 focus-within:ring-red-brand/30
+                           shadow-[0_20px_40px_rgba(229,9,20,0.3)]
+                           hover:shadow-[0_25px_50px_rgba(229,9,20,0.4)]
+                           hover:-translate-y-1 active:translate-y-0"
+              >
+                <Upload size={22} strokeWidth={2.5} />
+                Select Local File
+              </label>
+
+              <button
+                onClick={startScreenShare}
+                className="flex items-center gap-3 px-8 py-4
+                           bg-bg-surface/80 hover:bg-bg-hover text-text-secondary hover:text-white
+                           border border-border/50 hover:border-border-bright
+                           rounded-2xl text-base font-bold uppercase tracking-widest
+                           backdrop-blur-md transition-all duration-300
+                           focus:outline-none focus:ring-4 focus:ring-white/10
+                           hover:-translate-y-1 active:translate-y-0"
+              >
+                <MonitorPlay size={22} strokeWidth={2.5} />
+                Screen Share
+              </button>
             </div>
-            <h3 className="text-white font-bold text-lg tracking-tight">Ready to Sync</h3>
-            <p className="text-text-muted text-sm max-w-[280px]">
-              Load a local video or share your screen to start the watch party.
-            </p>
+
+            <div className="flex flex-col items-center gap-2">
+              <h3 className="text-white font-black text-2xl sm:text-3xl tracking-tight">Ready to Sync</h3>
+              <p className="text-text-muted text-sm sm:text-base max-w-[320px] leading-relaxed">
+                Invite friends and start your watch party by choosing a source above.
+              </p>
+            </div>
           </div>
         )}
 
