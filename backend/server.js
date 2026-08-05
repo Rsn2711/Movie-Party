@@ -23,6 +23,8 @@ app.use((req, res, next) => {
   next();
 });
 
+app.get("/", (_req, res) => res.send("Backend is running 🚀"));
+
 app.get("/health", (_req, res) =>
   res.json({ status: "OK", ts: Date.now(), rooms: Object.keys(rooms).length })
 );

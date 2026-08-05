@@ -6,8 +6,6 @@ import {
   ArrowRight, Users, Zap, Sparkles,
 } from 'lucide-react';
 import socket from '../socket';
-import Button from '../components/ui/Button';
-import LaptopShowcase from '../components/ui/LaptopShowcase';
 
 /* ────────────────────────────────────────────────────────────────
    Static Data
@@ -42,6 +40,34 @@ const QUOTES = [
   'Miles apart, but frame by frame together.',
   'The best scenes are the ones we react to together.',
 ];
+
+/* ────────────────────────────────────────────────────────────────
+   Hero Background Video — desktop only
+──────────────────────────────────────────────────────────────── */
+function HeroVideoBackground() {
+  return (
+    <div className="hidden lg:block absolute inset-0 overflow-hidden" aria-hidden="true">
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        className="absolute inset-0 w-full h-full object-cover"
+      >
+        <source src="/spiderman2.mp4" type="video/mp4" />
+      </video>
+
+      {/* Overlay — matches the reference .bg-video::after gradient exactly */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background: 'linear-gradient(101.47deg, #0A0C10 26.38%, rgba(10, 12, 16, 0.8) 50.07%, #0A0C10 73.17%)',
+        }}
+      />
+    </div>
+  );
+}
 
 /* ────────────────────────────────────────────────────────────────
    Ambient Background — layered glows (pure CSS, no intervals)
@@ -361,19 +387,28 @@ function CTAGroup({ creating, isConnected, status, onCreateRoom, roomCode, setRo
     <div className="w-full flex flex-col gap-4">
       {/* Inline Create + Join row */}
       <div className="flex flex-col xs:flex-row items-stretch xs:items-center gap-3">
-        {/* Create button */}
-        <Button
-          variant="primary"
-          size="lg"
+        {/* Create button — same skewed corner-reveal style as the reference's "Pre-order now" */}
+        <motion.button
+          type="button"
           onClick={onCreateRoom}
           disabled={!isConnected || creating}
-          loading={creating}
-          icon={!creating ? <Play size={14} fill="currentColor" aria-hidden="true" /> : undefined}
-          className="flex-shrink-0 text-sm font-semibold w-full xs:w-auto"
           aria-label="Create a new watch party room"
+          aria-busy={creating}
+          whileHover={(!isConnected || creating) ? {} : { scale: 1.02 }}
+          whileTap={(!isConnected || creating) ? {} : { scale: 0.97 }}
+          className="hero-btn-solid text-sm font-semibold gap-2 w-full xs:w-auto flex-shrink-0
+                     disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
         >
+          {creating ? (
+            <svg className="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+              <circle cx="12" cy="12" r="10" strokeOpacity={0.25} />
+              <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+            </svg>
+          ) : (
+            <Play size={14} fill="currentColor" aria-hidden="true" />
+          )}
           {creating ? 'Creating…' : 'Create Room'}
-        </Button>
+        </motion.button>
 
         {/* OR divider */}
         <span
@@ -386,19 +421,12 @@ function CTAGroup({ creating, isConnected, status, onCreateRoom, roomCode, setRo
         {/* Join inline form */}
         <form
           onSubmit={onJoinRoom}
-          className="relative flex-1 min-w-0 group"
+          className="flex items-stretch gap-3 flex-1 min-w-0"
           aria-label="Join a room"
         >
-          {/* Focus glow */}
           <div
-            className="absolute inset-0 bg-red-brand/[0.06] blur-lg opacity-0
-                       group-focus-within:opacity-100 transition-opacity duration-300 rounded-lg"
-            aria-hidden="true"
-          />
-
-          <div
-            className="relative flex items-center bg-bg-surface border border-border
-                       group-hover:border-border-bright group-focus-within:border-red-brand/40
+            className="relative flex items-center flex-1 min-w-0 bg-bg-surface border border-border
+                       hover:border-border-bright focus-within:border-red-brand/40
                        rounded-lg overflow-hidden transition-all duration-250"
           >
             <input
@@ -414,22 +442,18 @@ function CTAGroup({ creating, isConnected, status, onCreateRoom, roomCode, setRo
                          placeholder-text-dim focus:outline-none
                          tracking-[0.14em] font-semibold uppercase min-w-0"
             />
-            <button
-              type="submit"
-              disabled={!isConnected || !roomCode.trim()}
-              aria-label="Join room"
-              className={`px-4 py-2.5 border-l border-border text-sm font-semibold
-                          flex-shrink-0 flex items-center gap-1.5
-                          transition-all duration-200
-                          ${roomCode.trim()
-                  ? 'bg-red-brand text-white border-red-brand'
-                  : 'bg-white/90 hover:bg-white text-black border-white'
-                }
-                disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              Join <ArrowRight size={13} aria-hidden="true" />
-            </button>
           </div>
+
+          {/* Join button — same outline fill-sweep style as the reference's "Watch the teaser" */}
+          <button
+            type="submit"
+            disabled={!isConnected || !roomCode.trim()}
+            aria-label="Join room"
+            className="hero-btn-outline text-sm font-semibold gap-1.5 flex-shrink-0
+                       disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
+          >
+            Join <ArrowRight size={13} aria-hidden="true" />
+          </button>
         </form>
       </div>
 
@@ -777,56 +801,71 @@ export default function Home() {
           HERO SECTION
       ═══════════════════════════════════════════════════════════ */}
       <section
-        className="relative flex items-center pt-24 sm:pt-24 pb-12 sm:pb-24 min-h-[100dvh]"
+        className="relative flex items-end pt-24 sm:pt-24 pb-12 sm:pb-24 min-h-[100dvh]"
         aria-label="Hero section"
       >
+        <HeroVideoBackground />
         <AmbientBackground />
         <Particles />
 
-        <div className="container-content w-full relative z-10">
+        <div className="w-full max-w-none px-4 sm:px-6 lg:px-8 xl:px-16 2xl:px-24 relative z-10">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-16 xl:gap-20 items-center">
 
-            {/* ── LEFT: Laptop Showcase (hidden on mobile to save space) ── */}
-            <motion.div
-              variants={leftVariants}
-              initial="hidden"
-              animate="visible"
-              className="w-full order-2 lg:order-1 hidden sm:block relative"
-            >
-              <LaptopShowcase />
-            </motion.div>
-
-            {/* ── RIGHT: Text + CTA ── */}
+            {/* ── RIGHT: Laptop Showcase (hidden on mobile to save space) ── */}
             <motion.div
               variants={rightVariants}
               initial="hidden"
               animate="visible"
-              className="flex flex-col items-center sm:items-start gap-5 sm:gap-6 order-1 lg:order-2"
+              className="w-full order-2 lg:order-2 hidden sm:block relative"
+            >
+              <img
+                src="/spider-man.png"
+                alt="Watch party scene"
+                className="block w-[110%] lg:w-[145%] xl:w-[160%] max-w-none h-auto object-contain lg:-translate-x-28 lg:-translate-y-4 xl:-translate-x-40 xl:-translate-y-6"
+              />
+            </motion.div>
+
+            {/* ── LEFT: Text + CTA ── */}
+            <motion.div
+              variants={leftVariants}
+              initial="hidden"
+              animate="visible"
+              className="flex flex-col items-center sm:items-start gap-5 sm:gap-6 order-1 lg:order-1 lg:-mt-[50px] xl:-mt-50"
             >
 
               {/* Headline */}
-              <h1 className="text-4xl xs:text-5xl sm:text-6xl xl:text-7xl font-black text-white leading-[0.9] tracking-tight text-balance text-center sm:text-left">
-                Watch Together.
-                <br />
-                <span className="text-red-brand">In Sync.</span>
+              <h1 className="w-full flex justify-center sm:justify-start">
+                <img
+                  src="/watchtogether.png"
+                  alt="Watch Together, In Sync"
+                  className="w-full max-w-[580px] xs:max-w-[660px] sm:max-w-[820px] lg:max-w-[820px] xl:max-w-[800px] h-auto"
+                  style={{ filter: 'drop-shadow(0 4px 40px rgba(0,0,0,0.6))' }}
+                />
               </h1>
 
-              {/* Typewriter subtitle */}
-              <div className="w-full flex justify-center sm:justify-start">
-                <TypewriterQuote />
-              </div>
+              {/* Description */}
+              <p className="w-full max-w-[520px] text-text-muted text-sm sm:text-base leading-relaxed text-center sm:text-left">
+                Enjoy movies and shows together from anywhere in the world. Create a
+                private watch party, invite your friends instantly, and experience
+                synchronized playback with real-time chat. No countdowns, no
+                buffering confusion—just smooth streaming and unforgettable moments
+                shared together.
+              </p>
 
 
-              {/* Laptop — mobile only, shown above buttons */}
+              {/* Scene image — mobile only, shown above buttons */}
               <motion.div
                 variants={leftVariants}
                 initial="hidden"
                 animate="visible"
-                className="block sm:hidden w-full origin-center -my-10 relative pointer-events-none"
-                style={{ scale: 0.5 }}
+                className="block sm:hidden w-[130%] max-w-none origin-center -mx-[15%] -my-4 relative pointer-events-none"
               >
                 <FloatingLogos />
-                <LaptopShowcase />
+                <img
+                  src="/spider-man.png"
+                  alt="Watch party scene"
+                  className="w-full h-auto object-contain"
+                />
               </motion.div>
 
               {/* CTA Group */}

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Great+Vibes&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Great+Vibes&family=Anton&family=Permanent+Marker&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -130,6 +130,102 @@
 
   .text-pretty {
     text-wrap: pretty;
+  }
+
+  /* ── Hero CTA buttons — skewed poster-style with corner/fill hover reveal ── */
+  .hero-btn-solid {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px 32px;
+    border-radius: 3px;
+    transform: skew(-10deg);
+    text-transform: uppercase;
+    background: linear-gradient(225deg, #ea1d22 0%, #b31317 100%);
+    position: relative;
+    border: none;
+    color: #fff;
+  }
+
+  .hero-btn-solid > * {
+    transform: skew(10deg);
+  }
+
+  .hero-btn-solid::after {
+    content: "";
+    display: block;
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    width: 30%;
+    height: 70%;
+    opacity: 0;
+    border-radius: 3px;
+    border-top: 3px solid #fff;
+    border-left: 3px solid #fff;
+  }
+
+  .hero-btn-solid::before {
+    content: "";
+    display: block;
+    position: absolute;
+    bottom: -2px;
+    right: -2px;
+    width: 30%;
+    height: 70%;
+    opacity: 0;
+    transition: 0.7s ease;
+    border-radius: 3px;
+    border-bottom: 3px solid #fff;
+    border-right: 3px solid #fff;
+  }
+
+  .hero-btn-solid:hover:not(:disabled) {
+    transform: skew(-10deg) scale(1.05);
+    transition: 0.7s ease;
+  }
+
+  .hero-btn-solid:hover:not(:disabled)::after,
+  .hero-btn-solid:hover:not(:disabled)::before {
+    opacity: 1;
+  }
+
+  .hero-btn-outline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 32px;
+    border-radius: 3px;
+    transform: skew(-10deg);
+    text-transform: uppercase;
+    background: transparent;
+    border: 2px solid #ea1d22;
+    position: relative;
+    color: #fff;
+    overflow: hidden;
+  }
+
+  .hero-btn-outline > * {
+    position: relative;
+    z-index: 1;
+    transform: skew(10deg);
+  }
+
+  .hero-btn-outline::after {
+    content: "";
+    display: block;
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    z-index: 0;
+    width: 0%;
+    height: 104%;
+    transition: 0.7s ease;
+    background: linear-gradient(225deg, #ea1d22 0%, #b31317 100%);
+  }
+
+  .hero-btn-outline:hover:not(:disabled)::after {
+    width: 102%;
   }
 
   /* ── Seek Bar — Netflix-style video progress ── */
