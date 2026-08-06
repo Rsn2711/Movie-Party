@@ -202,135 +202,6 @@ function AmbientBackground() {
 /* ────────────────────────────────────────────────────────────────
    Floating Particles
 ──────────────────────────────────────────────────────────────── */
-/* ────────────────────────────────────────────────────────────────
-   Floating Brand Logos
-   Animated icons for YouTube, Netflix, Prime, etc.
-──────────────────────────────────────────────────────────────── */
-const BRANDS = [
-  /* Perfect circular distribution */
-  { id: 'hs', name: 'Hotstar', color: '#01147C', dur: 12, delay: 0 },
-  { id: 'yt', name: 'YouTube', color: '#FF0000', dur: 14, delay: 2 },
-  { id: 'nf', name: 'Netflix', color: '#E50914', dur: 16, delay: 4 },
-  { id: 'dis', name: 'Disney+', color: '#0063E5', dur: 15, delay: 1 },
-  { id: 'max', name: 'HBO Max', color: '#991BFA', dur: 17, delay: 3 },
-  { id: 'ap', name: 'Prime', color: '#00A8E1', dur: 13, delay: 5 },
-  { id: 'atv', name: 'AppleTV', color: '#555555', dur: 18, delay: 7 },
-  { id: 'hu', name: 'Hulu', color: '#3DBB3D', dur: 14, delay: 0.5 },
-  { id: 'z5', name: 'Zee5', color: '#8224E3', dur: 16, delay: 2.5 },
-  { id: 'nf2', name: 'Netflix2', color: '#E50914', dur: 15, delay: 4.5 },
-  { id: 'yt2', name: 'YouTube2', color: '#FF0000', dur: 17, delay: 1.5 },
-  { id: 'sho', name: 'Showtime', color: '#FF0000', dur: 13, delay: 3.5 },
-];
-
-function BrandIcon({ id, color }) {
-  const commonIconClass = "w-full h-full flex items-center justify-center font-black text-white italic tracking-tighter";
-
-  if (id.startsWith('yt')) return (
-    <svg viewBox="0 0 24 24" fill={color} className="w-full h-full"><path d="M19.615 3.184c-3.604-.246-11.631-.245-15.23 0-3.897.266-4.356 2.62-4.385 8.816.029 6.185.484 8.549 4.385 8.816 3.6.245 11.626.246 15.23 0 3.897-.266 4.356-2.62 4.385-8.816-.029-6.185-.484-8.549-4.385-8.816zm-10.615 12.816v-8l8 4-8 4z" /></svg>
-  );
-  if (id.startsWith('nf')) return (
-    <div className={commonIconClass} style={{ fontSize: 22, textShadow: '0 0 10px rgba(0,0,0,0.5)' }}>N</div>
-  );
-  if (id === 'ap') return (
-    <div className="w-full h-full flex flex-col items-center justify-center">
-      <div style={{ color }} className="font-black italic text-[10px] leading-none mb-[-2px]">prime</div>
-      <svg viewBox="0 0 24 6" fill={color} className="w-4"><path d="M0 2.5c4 3 10 3 14 0" fill="none" stroke={color} strokeWidth="2" /><path d="M12 1l2 1.5-2 1.5" /></svg>
-    </div>
-  );
-  if (id === 'z5') return (
-    <div className="w-full h-full rounded-full flex items-center justify-center font-black text-white text-[11px]" style={{ background: 'linear-gradient(45deg, #8224E3, #FF0080)' }}>Z5</div>
-  );
-  if (id === 'hs') return (
-    <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-white" style={{ background: color, borderRadius: 4 }}>★ HS</div>
-  );
-  if (id === 'dis') return (
-    <div className="w-full h-full flex items-center justify-center text-[9px] font-black italic tracking-tighter text-white" style={{ background: 'linear-gradient(135deg, #002d72, #0063E5)', borderRadius: 4 }}>Disney+</div>
-  );
-  if (id === 'max') return (
-    <div className="w-full h-full flex items-center justify-center text-[22px] font-black text-white" style={{ color: '#fff', textShadow: '0 0 12px rgba(153,27,250,0.8)' }}>M</div>
-  );
-  if (id === 'atv') return (
-    <div className="w-full h-full flex items-center justify-center text-[18px] text-white"></div>
-  );
-  if (id === 'hu') return (
-    <div className="w-full h-full flex items-center justify-center text-[13px] font-black text-white italic" style={{ color: '#3DBB3D' }}>hulu</div>
-  );
-  if (id === 'sho') return (
-    <div className="w-full h-full flex items-center justify-center text-[8px] font-black text-white bg-red-600 rounded-sm">SHOWTIME</div>
-  );
-  return null;
-}
-
-function FloatingLogos() {
-  const radius = 260; // Perfect circle radius
-  return (
-    <motion.div
-      className="absolute inset-0 flex items-center justify-center pointer-events-none z-0"
-      animate={{ rotate: 360 }}
-      transition={{ duration: 60, repeat: Infinity, ease: "linear" }}
-    >
-      {BRANDS.map((b, i) => {
-        const angle = (i * 360 / BRANDS.length - 90) * (Math.PI / 180);
-        const x = Math.cos(angle) * radius;
-        const y = Math.sin(angle) * radius;
-
-        return (
-          <motion.div
-            key={`${b.id}-${i}`}
-            className="absolute w-12 h-12 sm:w-16 sm:h-16"
-            style={{
-              x, y,
-              left: 'calc(50% - 24px)', // Half width mobile
-              top: 'calc(50% - 24px)',  // Half height mobile
-            }}
-            animate={{
-              y: [y - 12, y + 12, y - 12],
-              // Counter-rotate the icon itself so it stays upright while its container rotates
-              rotate: [-0, -360],
-              scale: [1, 1.05, 0.95, 1],
-            }}
-            transition={{
-              y: { duration: b.dur, repeat: Infinity, ease: "easeInOut", delay: b.delay },
-              rotate: { duration: 60, repeat: Infinity, ease: "linear" },
-              scale: { duration: b.dur, repeat: Infinity, ease: "easeInOut", delay: b.delay }
-            }}
-          >
-            {/* sm: variant for responsive half-size */}
-            <style>{`
-              @media (min-width: 640px) {
-                .brand-node-${i} {
-                  left: calc(50% - 32px) !important;
-                  top: calc(50% - 32px) !important;
-                }
-              }
-            `}</style>
-
-            <div className={`brand-node-${i} relative w-full h-full p-[1px] rounded-2xl overflow-hidden group`}>
-              {/* animated border gradient */}
-              <div
-                className="absolute inset-[-100%] animate-[spin_4s_linear_infinite] opacity-0 group-hover:opacity-100 transition-opacity"
-                style={{ background: `conic-gradient(from 0deg, transparent 60%, ${b.color} 100%)` }}
-              />
-
-              <div className="relative w-full h-full bg-[#111]/80 backdrop-blur-2xl rounded-[inherit] border border-white/10 flex items-center justify-center p-2.5 shadow-[0_0_20px_rgba(0,0,0,0.5)]">
-                {/* Subtle inner reflection */}
-                <div className="absolute inset-0 bg-gradient-to-tr from-white/5 to-transparent pointer-events-none" />
-                <BrandIcon id={b.id} color={b.color} />
-              </div>
-            </div>
-
-            {/* Premium Ambient Glow */}
-            <div
-              className="absolute inset-0 blur-[30px] opacity-10 rounded-full scale-150 transition-transform duration-500 group-hover:scale-[2] group-hover:opacity-20"
-              style={{ background: b.color }}
-            />
-          </motion.div>
-        );
-      })}
-    </motion.div>
-  );
-}
-
 const PARTICLES = [
   { size: 3, x: '12%', delay: 0, dur: 14, opacity: 0.4 },
   { size: 2, x: '28%', delay: 2, dur: 18, opacity: 0.3 },
@@ -742,7 +613,7 @@ function HowItWorks() {
           </motion.div>
         </div>
 
-        <div className="grid grid-cols-4 gap-2 sm:gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-3 gap-y-8 sm:gap-6">
           {HOW_STEPS.map((s, i) => (
             <motion.div
               key={i}
@@ -752,10 +623,10 @@ function HowItWorks() {
               transition={{ duration: 0.45, delay: i * 0.07, ease: [0.16, 1, 0.3, 1] }}
               className="relative flex flex-col items-center sm:items-start gap-2 sm:gap-3 text-center sm:text-left"
             >
-              {/* Connector line (hidden on last) */}
+              {/* Connector line — only meaningful in the single-row sm+ layout */}
               {i < HOW_STEPS.length - 1 && (
                 <div
-                  className="absolute top-4 sm:top-6 left-[calc(50%+16px)] sm:left-[calc(50%+24px)] right-[-50%]
+                  className="hidden sm:block absolute top-4 sm:top-6 left-[calc(50%+16px)] sm:left-[calc(50%+24px)] right-[-50%]
                              h-px bg-gradient-to-r from-border to-transparent"
                   aria-hidden="true"
                 />
@@ -773,10 +644,10 @@ function HowItWorks() {
               </div>
 
               <div className="min-w-0">
-                <h3 className="text-white font-bold text-[10px] sm:text-sm mb-0.5 sm:mb-1 truncate sm:whitespace-normal">
+                <h3 className="text-white font-bold text-[11px] sm:text-sm mb-0.5 sm:mb-1 whitespace-normal">
                   {s.title}
                 </h3>
-                <p className="hidden xs:block text-text-muted text-[9px] sm:text-[13px] leading-tight sm:leading-relaxed line-clamp-2 md:line-clamp-none">
+                <p className="block text-text-muted text-[10px] sm:text-[13px] leading-tight sm:leading-relaxed">
                   {s.desc}
                 </p>
               </div>
@@ -935,7 +806,6 @@ export default function Home() {
                 animate="visible"
                 className="block sm:hidden w-[130%] max-w-none origin-center -mx-[15%] -my-4 relative pointer-events-none"
               >
-                <FloatingLogos />
                 <img
                   src="/spider-man.webp"
                   alt="Watch party scene"
@@ -950,7 +820,7 @@ export default function Home() {
                 variants={ctaVariants}
                 initial="hidden"
                 animate="visible"
-                className="w-[65%] sm:w-full sm:max-w-none min-w-[210px]"
+                className="w-full max-w-[360px] sm:w-full sm:max-w-none min-w-[210px]"
               >
                 <CTAGroup
                   creating={creating}
