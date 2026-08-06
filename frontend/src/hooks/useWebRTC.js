@@ -34,9 +34,20 @@
 import { useRef, useState, useEffect, useCallback } from "react";
 
 // ─── ICE Configuration ────────────────────────────────────────────────────────
-// Free TURN servers: openrelay.metered.ca (no sign-up needed, testing only)
-// Replace with your own TURN server for production to avoid rate limits.
-// Metered.ca free tier: https://www.metered.ca/tools/openrelay/
+// STUN only for now — no bundled TURN server. STUN alone is enough for most
+// direct P2P connections (same network, or either peer behind a plain/cone NAT).
+// It is NOT enough when a peer is behind symmetric NAT (common on mobile data /
+// corporate networks) — those connections need a TURN relay.
+//
+// To add TURN, set these env vars (e.g. in frontend/.env.production) and the
+// entry below is picked up automatically — no code changes needed:
+//   REACT_APP_TURN_URL=turn:your-turn-host:3478
+//   REACT_APP_TURN_USERNAME=...
+//   REACT_APP_TURN_CREDENTIAL=...
+// (previously this shipped with openrelay.metered.ca's shared test credentials
+// as a built-in fallback, but that free/shared TURN service now requires its
+// own account and the old public credentials no longer work, so it was removed
+// rather than leave a fallback that silently fails.)
 const ICE_CONFIG = {
     iceServers: [
         { urls: "stun:stun.l.google.com:19302" },
@@ -46,19 +57,7 @@ const ICE_CONFIG = {
         { urls: "stun:stun4.l.google.com:19302" },
         { urls: "stun:stun.services.mozilla.com" },
 
-        // ── Free TURN servers (openrelay.metered.ca) ──
-        // These allow NAT traversal when STUN alone fails (e.g. carrier NAT)
-        {
-            urls: [
-                "turn:openrelay.metered.ca:80",
-                "turn:openrelay.metered.ca:443",
-                "turn:openrelay.metered.ca:443?transport=tcp"
-            ],
-            username: "openrelayproject",
-            credential: "openrelayproject",
-        },
-
-        // ── Your own TURN (override via env vars for production) ──
+        // ── Your own TURN (enabled automatically once env vars are set) ──
         ...(process.env.REACT_APP_TURN_URL
             ? [
                 {
@@ -81,6 +80,36 @@ export function useWebRTC({ roomId, socket }) {
     const remoteDescSet = useRef({});        // { peerId: boolean }
     const localStreamRef = useRef(null);
     const makingOfferRef = useRef({});       // { peerId: boolean } — glare guard
+    const connectTimeouts = useRef({});      // { peerId: timeoutId } — "stuck connecting" watchdog
+
+    // Give ICE up to this long to reach "connected" before we surface a fallback
+    // status to the UI instead of leaving the user staring at "Connecting…" forever.
+    // (The browser's own ICE-failure timeout can take much longer than this.)
+    const ICE_CONNECT_TIMEOUT_MS = 12000;
+
+    const clearConnectWatchdog = useCallback((peerId) => {
+        if (connectTimeouts.current[peerId]) {
+            clearTimeout(connectTimeouts.current[peerId]);
+            delete connectTimeouts.current[peerId];
+        }
+    }, []);
+
+    const armConnectWatchdog = useCallback((peerId) => {
+        clearConnectWatchdog(peerId);
+        connectTimeouts.current[peerId] = setTimeout(() => {
+            const pc = pcs.current[peerId];
+            if (!pc) return;
+            const s = pc.iceConnectionState;
+            if (s !== "connected" && s !== "completed") {
+                console.warn(
+                    `[WebRTC] Peer ${peerId} did not connect within ${ICE_CONNECT_TIMEOUT_MS}ms (state: ${s}). ` +
+                    "Surfacing fallback status — likely a missing/unreachable TURN relay."
+                );
+                setPeerStates((prev) => ({ ...prev, [peerId]: "failed" }));
+                setUsingFallback(true);
+            }
+        }, ICE_CONNECT_TIMEOUT_MS);
+    }, [clearConnectWatchdog]);
 
     const [remoteStream, setRemoteStream] = useState(null);
     const [peerStates, setPeerStates] = useState({});
@@ -121,10 +150,12 @@ export function useWebRTC({ roomId, socket }) {
             remoteDescSet.current[peerId] = false;
             iceCandidateQueue.current[peerId] = [];
             makingOfferRef.current[peerId] = false;
+            clearConnectWatchdog(peerId);
 
             console.log(`[WebRTC] Creating RTCPeerConnection for ${peerId}`);
             const pc = new RTCPeerConnection(ICE_CONFIG);
             pcs.current[peerId] = pc;
+            armConnectWatchdog(peerId);
 
             // ── ICE candidate handler ─────────────────────────────────────────────
             pc.onicecandidate = ({ candidate }) => {
@@ -154,6 +185,10 @@ export function useWebRTC({ roomId, socket }) {
                             : "connecting";
 
                 setPeerStates((prev) => ({ ...prev, [peerId]: normalized }));
+
+                if (normalized === "connected") {
+                    clearConnectWatchdog(peerId);
+                }
 
                 if (s === "failed") {
                     console.error(
@@ -214,7 +249,7 @@ export function useWebRTC({ roomId, socket }) {
 
             return pc;
         },
-        [socket]
+        [socket, clearConnectWatchdog, armConnectWatchdog]
     );
 
     // ── Helper: add all local tracks to a peer connection ─────────────────────
@@ -279,6 +314,7 @@ export function useWebRTC({ roomId, socket }) {
     const stopStream = useCallback(() => {
         console.log("[WebRTC] stopStream — closing all connections");
         Object.values(pcs.current).forEach((pc) => pc.close());
+        Object.keys(connectTimeouts.current).forEach(clearConnectWatchdog);
         pcs.current = {};
         iceCandidateQueue.current = {};
         remoteDescSet.current = {};
@@ -287,7 +323,7 @@ export function useWebRTC({ roomId, socket }) {
         setRemoteStream(null);
         setPeerStates({});
         setUsingFallback(false);
-    }, []);
+    }, [clearConnectWatchdog]);
 
     // ── Socket event handlers ─────────────────────────────────────────────────
     useEffect(() => {
@@ -421,6 +457,7 @@ export function useWebRTC({ roomId, socket }) {
                 pcs.current[leftUserId].close();
                 delete pcs.current[leftUserId];
             }
+            clearConnectWatchdog(leftUserId);
             delete remoteDescSet.current[leftUserId];
             delete iceCandidateQueue.current[leftUserId];
             delete makingOfferRef.current[leftUserId];
@@ -454,6 +491,7 @@ export function useWebRTC({ roomId, socket }) {
         sendOffer,
         flushIceCandidates,
         queueIceCandidate,
+        clearConnectWatchdog,
     ]);
 
     // ── Cleanup on unmount ────────────────────────────────────────────────────

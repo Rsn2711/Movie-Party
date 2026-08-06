@@ -162,21 +162,41 @@ stun:stun2.l.google.com:19302
 STUN works when at least one peer is behind a "cone" NAT (most home ISPs).
 **STUN fails** when either peer is behind **symmetric NAT** (mobile, corporate, strict ISPs).
 
-### TURN (Built-in free server for testing)
-The code includes `openrelay.metered.ca` TURN servers as a built-in fallback.
-These work for testing — for production replace with your own TURN server.
+### TURN (not bundled — required for cross-network viewers)
+No TURN server ships with the app; only the free public STUN servers above are
+used by default. This is enough when host and viewer are on friendly networks,
+but **any viewer behind symmetric NAT (mobile data, corporate Wi-Fi) will get
+stuck on "Connecting…" and never receive video** without a TURN relay — STUN
+cannot punch through symmetric NAT, full stop.
 
-### Your own TURN server (recommended for production)
-Set these in `frontend/.env.local` or `frontend/.env.production`:
+(An earlier version bundled `openrelay.metered.ca`'s shared test credentials
+as a built-in fallback. That free/shared service now requires its own account
+and the old public credentials no longer work, so it was removed rather than
+leave a fallback that silently fails and hides the real problem.)
+
+### Adding your own TURN server (needed for reliable cross-network video)
+Set these in `frontend/.env.local` or `frontend/.env.production` — they're
+picked up automatically, no code changes needed:
 ```bash
 REACT_APP_TURN_URL=turn:your-server.com:3478
 REACT_APP_TURN_USERNAME=your_username
 REACT_APP_TURN_CREDENTIAL=your_password
 ```
 
-**Free TURN providers**:
-- [Metered.ca](https://www.metered.ca/) — 50 GB/month free tier
+**TURN providers**:
+- [Metered.ca](https://www.metered.ca/) — free tier, but as of 2025 requires creating
+  an account/app in their dashboard (the old no-signup shared credentials are dead)
 - [Twilio](https://www.twilio.com/docs/stun-turn) — pay-as-you-go
+- [Cloudflare Calls TURN](https://developers.cloudflare.com/calls/turn/) — free tier
+- Self-hosted [coturn](https://github.com/coturn/coturn) on a small VPS
+
+### Client-side "stuck connecting" watchdog
+Since ICE can take a long time (or never) to reach its own internal "failed"
+state, `useWebRTC.js` now arms a 12s watchdog per peer connection: if it hasn't
+reached `connected`/`completed` by then, the UI is told to show a fallback
+status immediately instead of hanging on "Connecting…" indefinitely. This is a
+UX improvement only — it does not make the connection succeed. A working TURN
+server is still required for symmetric-NAT peers to actually receive video.
 
 ---
 
@@ -198,7 +218,8 @@ Production: Host = home WiFi behind NAT A
             Viewer = mobile/corporate behind NAT B (possibly symmetric)
             → STUN cannot punch through symmetric NAT → ICE fails
 ```
-**Fix**: Built-in TURN server (`openrelay.metered.ca`) provides relay fallback.
+**Fix**: Add a TURN server via the env vars above (see "Adding your own TURN
+server"). There is currently no bundled TURN fallback — see note above.
 
 ### Reason 3 — captureStream() on un-started video
 ```

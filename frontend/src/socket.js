@@ -2,7 +2,7 @@ import { io } from "socket.io-client";
 
 // Use environment-based backend URL with fallback options
 const BACKEND_URL = process.env.NODE_ENV === 'production'
-  ? process.env.REACT_APP_BACKEND_URL || "https://movie-watch-party-production.up.railway.app"
+  ? process.env.REACT_APP_BACKEND_URL || "https://cinesync-nosy.onrender.com"
   : "http://localhost:5000";
 
 // Log the backend URL being used for debugging
