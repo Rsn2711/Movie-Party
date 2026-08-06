@@ -118,6 +118,7 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
           if (e.name === "NotAllowedError") {
             // Browser blocked autoplay — show click-to-play overlay
             video.muted = true;
+            setIsMuted(true);
             video
               .play()
               .then(() => {
@@ -417,6 +418,7 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
     const video = videoRef.current;
     if (!video) return;
     video.muted = false;
+    setIsMuted(false);
     video
       .play()
       .then(() => {
@@ -425,6 +427,7 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
       })
       .catch(() => {
         video.muted = true;
+        setIsMuted(true);
         video.play().catch(() => { });
         setNeedsInteraction(false);
         setStatus("Live (Muted)", true);
@@ -557,7 +560,7 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
             Idle
           </span>
           {usingFallback && (
-            <span className="ml-1 text-[9px] sm:text-[10px] text-red-brand border border-red-brand/30 bg-red-muted px-1.5 py-0.5 rounded font-bold uppercase tracking-tighter">
+            <span className="ml-1 text-[9px] sm:text-[10px] text-red-brand border border-red-brand/30 bg-red-muted px-1.5 py-0.5 rounded-none font-bold uppercase tracking-tighter">
               Fallback
             </span>
           )}
@@ -569,9 +572,9 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
           <button
             onClick={handleCopy}
             aria-label={`Copy room code ${cleanRoomId}. ${copied ? "Copied!" : "Click to copy"}`}
-            className="flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5 
-                       bg-bg-surface border border-border hover:border-border-bright 
-                       rounded-lg transition-all duration-200 group min-h-[32px] sm:min-h-[36px]"
+            className="flex items-center gap-2 px-2.5 py-1.5 sm:px-3 sm:py-1.5
+                       bg-bg-surface border border-border hover:border-border-bright
+                       rounded-none transition-all duration-200 group min-h-[32px] sm:min-h-[36px]"
           >
             <span className="hidden xs:inline text-[10px] sm:text-xs text-text-muted font-bold uppercase tracking-widest">
               Room
@@ -601,7 +604,7 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 sm:px-3 sm:py-1.5
                          bg-red-muted hover:bg-red-brand/20 text-red-brand
                          border border-red-brand/30 hover:border-red-brand/50
-                         rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider
+                         rounded-none text-[10px] sm:text-xs font-bold uppercase tracking-wider
                          transition-all duration-200 min-h-[32px] sm:min-h-[36px]
                          focus:outline-none focus:ring-2 focus:ring-red-brand/50"
             >
@@ -640,7 +643,7 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
         {!isStreaming && (
           <div className="absolute inset-0 flex flex-col items-center justify-center gap-6 text-center px-6 z-20">
             {/* Input buttons area */}
-            <div className="flex flex-col sm:flex-row items-center gap-4 mb-4">
+            <div className="flex flex-col xs:flex-row items-center gap-3 sm:gap-4 mb-4">
               <input
                 type="file"
                 accept="video/*"
@@ -650,31 +653,20 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
               />
               <label
                 htmlFor="video-upload"
-                className="flex items-center gap-3 px-8 py-4
-                           bg-red-brand hover:bg-neutral-800 text-white
-                           rounded-2xl text-base font-bold uppercase tracking-widest
-                           cursor-pointer transition-all duration-300
-                           focus-within:ring-4 focus-within:ring-red-brand/30
-                           shadow-[0_20px_40px_rgba(229,9,20,0.3)]
-                           hover:shadow-[0_25px_50px_rgba(229,9,20,0.4)]
-                           hover:-translate-y-1 active:translate-y-0"
+                className="hero-btn-solid text-sm sm:text-base font-bold gap-3 cursor-pointer
+                           focus-within:ring-4 focus-within:ring-red-brand/30"
               >
-                <Upload size={22} strokeWidth={2.5} />
-                Select Local File
+                <Upload size={20} strokeWidth={2.5} aria-hidden="true" />
+                <span>Select Local File</span>
               </label>
 
               <button
+                type="button"
                 onClick={startScreenShare}
-                className="flex items-center gap-3 px-8 py-4
-                           bg-bg-surface/80 hover:bg-bg-hover text-text-secondary hover:text-white
-                           border border-border/50 hover:border-border-bright
-                           rounded-2xl text-base font-bold uppercase tracking-widest
-                           backdrop-blur-md transition-all duration-300
-                           focus:outline-none focus:ring-4 focus:ring-white/10
-                           hover:-translate-y-1 active:translate-y-0"
+                className="hero-btn-outline text-sm sm:text-base font-bold gap-3"
               >
-                <MonitorPlay size={22} strokeWidth={2.5} />
-                Screen Share
+                <MonitorPlay size={20} strokeWidth={2.5} aria-hidden="true" />
+                <span>Screen Share</span>
               </button>
             </div>
 
@@ -692,9 +684,9 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
           className="absolute left-1/2 -translate-x-1/2
                      flex flex-col gap-2.5 w-[calc(100%-1rem)] max-w-[920px]
                      px-3 py-2.5 sm:px-5 sm:py-3.5
-                     bg-black/90 backdrop-blur-2xl
-                     rounded-xl border border-red-brand/15
-                     shadow-[0_-4px_40px_rgba(229,9,20,0.07),0_16px_48px_rgba(0,0,0,0.9)]
+                     bg-bg-base/95 backdrop-blur-2xl
+                     rounded-none border border-border
+                     shadow-[0_16px_48px_rgba(0,0,0,0.9)]
                      transition-all duration-300 z-[100]"
           style={{
             bottom: isFullscreen ? 24 : 12,
@@ -822,7 +814,7 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
             className="absolute top-3 right-3 flex items-center gap-1.5
                        px-2.5 py-1 bg-red-muted border border-red-brand/30
                        text-red-brand text-[10px] font-bold tracking-widest uppercase
-                       rounded pointer-events-none"
+                       rounded-none pointer-events-none"
             aria-label="Live stream active"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-red-brand animate-pulse-red" aria-hidden="true" />
@@ -836,7 +828,7 @@ export default function VideoPlayer({ roomId, username = "Viewer" }) {
             className="absolute top-3 left-3 flex items-center gap-1.5
                        px-2.5 py-1 bg-red-muted border border-red-brand/25
                        text-red-brand text-[10px] font-bold tracking-wide uppercase
-                       rounded pointer-events-none"
+                       rounded-none pointer-events-none"
             aria-live="polite"
             aria-label={`Hosting for ${userList.length - 1} viewer${userList.length !== 2 ? 's' : ''}`}
           >

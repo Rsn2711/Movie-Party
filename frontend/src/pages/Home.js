@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
 import {
   Play, MonitorPlay, Shield, Globe,
   ArrowRight, Users, Zap, Sparkles,
@@ -45,18 +45,34 @@ const QUOTES = [
    Hero Background Video — desktop only
 ──────────────────────────────────────────────────────────────── */
 function HeroVideoBackground() {
+  // Only mount the <video> on viewports where it's actually visible (lg+).
+  // The element used to sit in the DOM at all sizes with `hidden` (display:none),
+  // which still triggers the browser to download the full video on mobile/tablet.
+  const [showVideo, setShowVideo] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    setShowVideo(mq.matches);
+    const onChange = (e) => setShowVideo(e.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
   return (
     <div className="hidden lg:block absolute inset-0 overflow-hidden" aria-hidden="true">
-      <video
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="auto"
-        className="absolute inset-0 w-full h-full object-cover"
-      >
-        <source src="/spiderman2.mp4" type="video/mp4" />
-      </video>
+      {showVideo && (
+        <video
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          poster="/spiderman2-poster.jpg"
+          className="absolute inset-0 w-full h-full object-cover"
+        >
+          <source src="/spiderman2-bg.mp4" type="video/mp4" />
+        </video>
+      )}
 
       {/* Overlay — matches the reference .bg-video::after gradient exactly */}
       <div
@@ -66,6 +82,58 @@ function HeroVideoBackground() {
         }}
       />
     </div>
+  );
+}
+
+/* ────────────────────────────────────────────────────────────────
+   Tilt Wrapper — 3D parallax tilt that follows the cursor
+   Applied as an outer layer so it doesn't touch the child's own
+   transform (position offsets etc. stay intact).
+──────────────────────────────────────────────────────────────── */
+function TiltWrapper({ children, className, maxTilt = 10, scale = 1.03 }) {
+  const ref = useRef(null);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+
+  const rotateX = useTransform(y, [-0.5, 0.5], [maxTilt, -maxTilt]);
+  const rotateY = useTransform(x, [-0.5, 0.5], [-maxTilt, maxTilt]);
+
+  const springConfig = { stiffness: 180, damping: 18, mass: 0.4 };
+  const springRotateX = useSpring(rotateX, springConfig);
+  const springRotateY = useSpring(rotateY, springConfig);
+  const springScale = useSpring(1, springConfig);
+
+  const handleMouseMove = (e) => {
+    const rect = ref.current.getBoundingClientRect();
+    x.set((e.clientX - rect.left) / rect.width - 0.5);
+    y.set((e.clientY - rect.top) / rect.height - 0.5);
+  };
+
+  const handleMouseEnter = () => springScale.set(scale);
+
+  const handleMouseLeave = () => {
+    x.set(0);
+    y.set(0);
+    springScale.set(1);
+  };
+
+  return (
+    <motion.div
+      ref={ref}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      className={className}
+      style={{
+        perspective: 1200,
+        rotateX: springRotateX,
+        rotateY: springRotateY,
+        scale: springScale,
+        transformStyle: 'preserve-3d',
+      }}
+    >
+      {children}
+    </motion.div>
   );
 }
 
@@ -425,9 +493,9 @@ function CTAGroup({ creating, isConnected, status, onCreateRoom, roomCode, setRo
           aria-label="Join a room"
         >
           <div
-            className="relative flex items-center flex-1 min-w-0 bg-bg-surface border border-border
+            className="hero-input-skew relative flex items-center flex-1 min-w-0 bg-bg-surface border border-border
                        hover:border-border-bright focus-within:border-red-brand/40
-                       rounded-lg overflow-hidden transition-all duration-250"
+                       overflow-hidden transition-all duration-250"
           >
             <input
               type="text"
@@ -452,7 +520,7 @@ function CTAGroup({ creating, isConnected, status, onCreateRoom, roomCode, setRo
             className="hero-btn-outline text-sm font-semibold gap-1.5 flex-shrink-0
                        disabled:opacity-40 disabled:cursor-not-allowed disabled:pointer-events-none"
           >
-            Join <ArrowRight size={13} aria-hidden="true" />
+            <span>Join</span> <ArrowRight size={13} aria-hidden="true" />
           </button>
         </form>
       </div>
@@ -818,11 +886,15 @@ export default function Home() {
               animate="visible"
               className="w-full order-2 lg:order-2 hidden sm:block relative"
             >
-              <img
-                src="/spider-man.png"
-                alt="Watch party scene"
-                className="block w-[110%] lg:w-[145%] xl:w-[160%] max-w-none h-auto object-contain lg:-translate-x-28 lg:-translate-y-4 xl:-translate-x-40 xl:-translate-y-6"
-              />
+              <TiltWrapper className="block w-full">
+                <img
+                  src="/spider-man.webp"
+                  alt="Watch party scene"
+                  loading="eager"
+                  decoding="async"
+                  className="block w-[110%] lg:w-[145%] xl:w-[160%] max-w-none h-auto object-contain lg:-translate-x-32 lg:-translate-y-8 xl:-translate-x-44 xl:-translate-y-10"
+                />
+              </TiltWrapper>
             </motion.div>
 
             {/* ── LEFT: Text + CTA ── */}
@@ -836,15 +908,18 @@ export default function Home() {
               {/* Headline */}
               <h1 className="w-full flex justify-center sm:justify-start">
                 <img
-                  src="/watchtogether.png"
+                  src="/watchtogether.webp"
                   alt="Watch Together, In Sync"
+                  loading="eager"
+                  decoding="async"
+                  fetchpriority="high"
                   className="w-full max-w-[580px] xs:max-w-[660px] sm:max-w-[820px] lg:max-w-[820px] xl:max-w-[800px] h-auto"
                   style={{ filter: 'drop-shadow(0 4px 40px rgba(0,0,0,0.6))' }}
                 />
               </h1>
 
               {/* Description */}
-              <p className="w-full max-w-[520px] text-text-muted text-sm sm:text-base leading-relaxed text-center sm:text-left">
+              <p className="w-full max-w-[700px] text-text-muted text-sm leading-relaxed text-center sm:text-left">
                 Enjoy movies and shows together from anywhere in the world. Create a
                 private watch party, invite your friends instantly, and experience
                 synchronized playback with real-time chat. No countdowns, no
@@ -862,8 +937,10 @@ export default function Home() {
               >
                 <FloatingLogos />
                 <img
-                  src="/spider-man.png"
+                  src="/spider-man.webp"
                   alt="Watch party scene"
+                  loading="eager"
+                  decoding="async"
                   className="w-full h-auto object-contain"
                 />
               </motion.div>

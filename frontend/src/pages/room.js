@@ -6,7 +6,6 @@ import socket from '../socket';
 import VideoPlayer from '../components/VideoPlayer_v3';
 import Chat from '../components/Chat';
 import MembersList from '../components/MembersList';
-import Button from '../components/ui/Button';
 import { CineSyncLogo } from '../App';
 
 /* ────────────────────────────────────────────────────────────────
@@ -24,8 +23,14 @@ function JoinModal({ roomId, onJoin, onBack }) {
 
   return (
     <div
-      className="fixed inset-0 bg-bg-base flex items-center justify-center z-50 px-4"
+      className="fixed inset-0 bg-bg-base flex items-center justify-start z-50 px-4 sm:px-24 lg:px-48"
       role="main"
+      style={{
+        backgroundImage: `radial-gradient(ellipse 60% 55% at 50% 50%, rgba(10,10,10,0.75) 0%, rgba(10,10,10,0.95) 100%), url(/joinmodal-bg.webp)`,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }}
     >
       {/* Ambient background glow */}
       <div
@@ -36,96 +41,107 @@ function JoinModal({ roomId, onJoin, onBack }) {
         aria-hidden="true"
       />
 
+      {/* Right-side hero art */}
+      <motion.img
+        initial={{ opacity: 0, x: 24, scale: 1.1 }}
+        animate={{ opacity: 1, x: 0, scale: 1.6 }}
+        transition={{ duration: 0.6, ease: [0.16, 1, 0.3, 1] }}
+        src="/joinmodal-hero-art.webp"
+        alt=""
+        aria-hidden="true"
+        loading="eager"
+        decoding="async"
+        fetchpriority="high"
+        className="hidden lg:block pointer-events-none select-none absolute -right-36 top-56
+                   h-[110%] w-auto max-w-[55%] object-contain object-top"
+        style={{ mixBlendMode: 'screen', filter: 'drop-shadow(-20px 0 60px rgba(0,0,0,0.6))' }}
+      />
+
       <motion.div
-        initial={{ opacity: 0, scale: 0.95, y: 12 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-        className="relative w-full max-w-sm"
+        initial={{ opacity: 0, x: -24 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+        className="relative w-full max-w-xl flex flex-col gap-8 py-10"
         role="dialog"
         aria-modal="true"
         aria-labelledby="join-heading"
       >
-        {/* Card */}
-        <div className="bg-bg-modal border border-border rounded-2xl shadow-modal overflow-hidden">
-          {/* Top accent bar */}
-          <div className="h-0.5 w-full bg-red-brand" aria-hidden="true" />
+        {/* Header */}
+        <div className="flex flex-col items-start text-left gap-4">
+          {/* Room badge */}
+          <div
+            className="inline-flex items-center gap-2.5 bg-red-muted border border-red-brand/30
+                       text-red-brand text-sm font-bold tracking-widest uppercase
+                       px-4 py-2"
+          >
+            <span className="w-2 h-2 rounded-full bg-red-brand animate-pulse" aria-hidden="true" />
+            Room {roomId}
+          </div>
 
-          <div className="p-7 flex flex-col gap-6">
-            {/* Header */}
-            <div className="flex flex-col items-center text-center gap-3">
-              {/* Room badge */}
-              <div
-                className="inline-flex items-center gap-2 bg-red-muted border border-red-brand/20
-                           text-red-brand text-xs font-bold tracking-widest uppercase
-                           px-3 py-1.5 rounded-full"
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-red-brand" aria-hidden="true" />
-                Room {roomId}
-              </div>
-
-              <div>
-                <h1
-                  id="join-heading"
-                  className="text-xl font-black text-white tracking-tight"
-                >
-                  Joining Theater
-                </h1>
-                <p className="text-text-secondary text-sm mt-1">
-                  What should we call you?
-                </p>
-              </div>
-            </div>
-
-            {/* Form */}
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-              <div>
-                <label
-                  htmlFor="viewer-name"
-                  className="block text-xs font-semibold text-text-secondary uppercase tracking-wide mb-1.5"
-                >
-                  Your Name
-                </label>
-                <input
-                  id="viewer-name"
-                  autoFocus
-                  type="text"
-                  placeholder="e.g. Alex, Movie Fan…"
-                  value={nameInput}
-                  onChange={e => setNameInput(e.target.value)}
-                  maxLength={24}
-                  autoComplete="nickname"
-                  className="w-full bg-bg-surface border border-border rounded-lg
-                             px-4 py-3 text-white text-sm placeholder-text-dim
-                             focus:outline-none focus:border-red-brand focus:shadow-input-focus
-                             hover:border-border-bright
-                             transition-all duration-250 min-h-[44px]"
-                />
-                <p className="text-2xs text-text-dim mt-1.5">
-                  Leave blank for a random name
-                </p>
-              </div>
-
-              <Button
-                type="submit"
-                variant="primary"
-                size="lg"
-                fullWidth
-              >
-                Enter Theater
-              </Button>
-
-              <button
-                type="button"
-                onClick={onBack}
-                className="text-text-muted text-sm hover:text-text-secondary
-                           transition-colors duration-200 text-center
-                           focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20 rounded"
-              >
-                ← Back to Home
-              </button>
-            </form>
+          <div>
+            <h1
+              id="join-heading"
+              className="text-5xl sm:text-6xl font-black text-white tracking-tight leading-[1.05]"
+              style={{ textShadow: '0 4px 40px rgba(0,0,0,0.6)' }}
+            >
+              Joining
+              <br />
+              <span className="text-red-brand">Theater</span>
+            </h1>
+            <p className="text-text-secondary text-lg mt-3">
+              What should we call you?
+            </p>
           </div>
         </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-5 max-w-md w-full">
+          <div>
+            <label
+              htmlFor="viewer-name"
+              className="block text-xs font-semibold text-text-secondary uppercase tracking-wide mb-2"
+            >
+              Your Name
+            </label>
+            <input
+              id="viewer-name"
+              autoFocus
+              type="text"
+              placeholder="e.g. Alex, Movie Fan…"
+              value={nameInput}
+              onChange={e => setNameInput(e.target.value)}
+              maxLength={24}
+              autoComplete="nickname"
+              className="w-full bg-black/40 backdrop-blur-sm border border-white/15 rounded-none
+                         px-5 py-4 text-white text-base placeholder-text-dim
+                         focus:outline-none focus:border-red-brand focus:shadow-input-focus
+                         hover:border-white/30
+                         transition-all duration-250 min-h-[56px]"
+            />
+            <p className="text-xs text-text-dim mt-2">
+              Leave blank for a random name
+            </p>
+          </div>
+
+          <motion.button
+            type="submit"
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.97 }}
+            className="hero-btn-solid text-base font-semibold w-full py-4"
+          >
+            <span>Enter Theater</span>
+          </motion.button>
+
+          <button
+            type="button"
+            onClick={onBack}
+            className="text-text-muted text-sm hover:text-white
+                       transition-colors duration-200 text-left w-fit
+                       focus:outline-none focus-visible:ring-2 focus-visible:ring-white/20 rounded-none"
+          >
+            ← Back to Home
+          </button>
+        </form>
       </motion.div>
     </div>
   );
@@ -146,7 +162,7 @@ function RoomHeader({ roomId, username, chatOpen, activeTab, onTogglePanel, onCo
         onClick={onLeave}
         aria-label="Go to CineSync home"
         className="flex-shrink-0 focus:outline-none focus-visible:ring-2
-                   focus-visible:ring-red-brand/50 rounded-lg p-1 -ml-1
+                   focus-visible:ring-red-brand/50 rounded-none p-1 -ml-1
                    transition-opacity hover:opacity-80"
       >
         <CineSyncLogo size="sm" />
@@ -165,7 +181,7 @@ function RoomHeader({ roomId, username, chatOpen, activeTab, onTogglePanel, onCo
       <button
         onClick={() => onTogglePanel('members')}
         aria-label="View members"
-        className={`flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-xs font-semibold
+        className={`flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-none text-xs font-semibold
                     border transition-all duration-200 min-h-[32px] sm:min-h-[36px] flex-shrink-0
                     focus:outline-none focus:ring-2 focus:ring-red-brand/50
                     ${chatOpen && activeTab === 'members'
@@ -176,7 +192,7 @@ function RoomHeader({ roomId, username, chatOpen, activeTab, onTogglePanel, onCo
         <Users size={13} aria-hidden="true" />
         <span className="hidden sm:inline">Members</span>
         {userCount > 0 && (
-          <span className="bg-red-brand/10 text-red-brand px-1 rounded text-[10px] ml-0.5">{userCount}</span>
+          <span className="bg-red-brand/10 text-red-brand px-1 rounded-none text-[10px] ml-0.5">{userCount}</span>
         )}
       </button>
 
@@ -185,7 +201,7 @@ function RoomHeader({ roomId, username, chatOpen, activeTab, onTogglePanel, onCo
         onClick={() => onTogglePanel('chat')}
         aria-label={chatOpen ? 'Collapse chat' : 'Open chat'}
         aria-pressed={chatOpen}
-        className={`flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-lg text-xs font-semibold
+        className={`flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 rounded-none text-xs font-semibold
                     border transition-all duration-200 min-h-[32px] sm:min-h-[36px] flex-shrink-0
                     focus:outline-none focus:ring-2 focus:ring-red-brand/50
                     ${chatOpen && activeTab === 'chat'
@@ -203,7 +219,7 @@ function RoomHeader({ roomId, username, chatOpen, activeTab, onTogglePanel, onCo
         aria-label="Leave room and return to home"
         className="flex items-center gap-1.5 px-2.5 py-1 sm:px-3 sm:py-1.5 bg-red-muted hover:bg-red-brand/20
                    border border-red-brand/20 hover:border-red-brand/40 text-red-brand
-                   text-xs font-semibold rounded-lg transition-all duration-200
+                   text-xs font-semibold rounded-none transition-all duration-200
                    min-h-[32px] sm:min-h-[36px] flex-shrink-0
                    focus:outline-none focus:ring-2 focus:ring-red-brand/50"
       >
@@ -263,7 +279,7 @@ function ChatPanel({ roomId, username, onClose, activeTab, onTabChange, userList
           <div className="flex items-center bg-bg-base/50 p-1 border-b border-border">
             <button
               onClick={() => onTabChange('chat')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all
+              className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-none transition-all
                           ${activeTab === 'chat'
                   ? 'bg-bg-surface text-white shadow-sm'
                   : 'text-text-muted hover:text-text-secondary'}`}
@@ -273,14 +289,14 @@ function ChatPanel({ roomId, username, onClose, activeTab, onTabChange, userList
             </button>
             <button
               onClick={() => onTabChange('members')}
-              className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all
+              className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-none transition-all
                           ${activeTab === 'members'
                   ? 'bg-bg-surface text-white shadow-sm'
                   : 'text-text-muted hover:text-text-secondary'}`}
             >
               <Users size={14} />
               Members
-              <span className={`px-1.5 py-0.5 rounded-full text-[9px] ${activeTab === 'members' ? 'bg-red-brand text-white' : 'bg-bg-surface text-text-dim'}`}>
+              <span className={`px-1.5 py-0.5 rounded-none text-[9px] ${activeTab === 'members' ? 'bg-red-brand text-white' : 'bg-bg-surface text-text-dim'}`}>
                 {userList.length}
               </span>
             </button>
@@ -310,7 +326,7 @@ function ChatPanel({ roomId, username, onClose, activeTab, onTabChange, userList
         exit={{ y: '100%' }}
         transition={{ type: 'spring', damping: 28, stiffness: 350 }}
         className="md:hidden fixed inset-x-0 bottom-0 z-50
-                   flex flex-col bg-bg-modal border-t border-border rounded-t-2xl
+                   flex flex-col bg-bg-modal border-t border-border rounded-none
                    overflow-hidden"
         style={{ maxHeight: '85vh' }}
         role="dialog"
@@ -327,16 +343,16 @@ function ChatPanel({ roomId, username, onClose, activeTab, onTabChange, userList
         </button>
 
         <div className="flex items-center justify-between px-4 pb-2 border-b border-border/50">
-          <div className="flex bg-bg-surface/50 p-1 rounded-xl w-full max-w-[240px]">
+          <div className="flex bg-bg-surface/50 p-1 rounded-none w-full max-w-[240px]">
             <button
               onClick={() => onTabChange('chat')}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${activeTab === 'chat' ? 'bg-bg-surface text-white' : 'text-text-muted'}`}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-none transition-all ${activeTab === 'chat' ? 'bg-bg-surface text-white' : 'text-text-muted'}`}
             >
               Chat
             </button>
             <button
               onClick={() => onTabChange('members')}
-              className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all ${activeTab === 'members' ? 'bg-bg-surface text-white' : 'text-text-muted'}`}
+              className={`flex-1 py-1.5 text-xs font-bold rounded-none transition-all ${activeTab === 'members' ? 'bg-bg-surface text-white' : 'text-text-muted'}`}
             >
               Members ({userList.length})
             </button>
@@ -344,7 +360,7 @@ function ChatPanel({ roomId, username, onClose, activeTab, onTabChange, userList
           <button
             onClick={onClose}
             aria-label="Close panel"
-            className="p-2 rounded-xl text-text-muted hover:text-white hover:bg-white/[0.1] transition-all"
+            className="p-2 rounded-none text-text-muted hover:text-white hover:bg-white/[0.1] transition-all"
           >
             <X size={18} />
           </button>

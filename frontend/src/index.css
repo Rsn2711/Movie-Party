@@ -228,6 +228,15 @@
     width: 102%;
   }
 
+  .hero-input-skew {
+    border-radius: 3px;
+    transform: skew(-10deg);
+  }
+
+  .hero-input-skew > * {
+    transform: skew(10deg);
+  }
+
   /* ── Seek Bar — Netflix-style video progress ── */
   input[type='range'].seek-bar {
     -webkit-appearance: none;

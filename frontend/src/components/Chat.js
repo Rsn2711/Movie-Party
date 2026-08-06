@@ -40,7 +40,7 @@ function EmptyChat() {
   return (
     <div className="flex flex-col items-center justify-center h-full text-center gap-4 px-6 py-8">
       <div
-        className="w-12 h-12 rounded-xl bg-bg-surface border border-border
+        className="w-12 h-12 rounded-none bg-bg-surface border border-border
                    flex items-center justify-center"
         aria-hidden="true"
       >
@@ -83,10 +83,10 @@ function MessageBubble({ msg, isOwn }) {
 
         {/* Bubble */}
         <div
-          className={`px-3 py-2 text-xs sm:text-sm leading-relaxed break-words rounded-2xl
+          className={`px-3 py-2 text-xs sm:text-sm leading-relaxed break-words rounded-none
                       ${isOwn
-              ? 'bg-red-brand text-white rounded-br-sm'
-              : 'bg-bg-surface border border-border text-white rounded-bl-sm'
+              ? 'bg-red-brand text-white'
+              : 'bg-bg-surface border border-border text-white'
             }`}
         >
           {msg.message}
@@ -182,6 +182,12 @@ export default function Chat({ roomId, username }) {
   return (
     <section
       className="flex flex-col h-full min-h-0 bg-bg-modal"
+      style={{
+        backgroundImage: "linear-gradient(rgba(10,10,10,0.82), rgba(10,10,10,0.82)), url('/chat-bg.webp')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }}
       aria-label="Live chat"
     >
       {/* Chat header */}
@@ -250,7 +256,7 @@ export default function Chat({ roomId, username }) {
             aria-label="Scroll to latest messages"
             className="absolute bottom-[72px] left-1/2 -translate-x-1/2
                        flex items-center gap-1.5 px-3 py-1.5
-                       bg-red-brand text-white text-xs font-semibold rounded-full
+                       bg-red-brand text-white text-xs font-semibold rounded-none
                        shadow-red-sm hover:bg-red-hover transition-all duration-200
                        focus:outline-none focus-visible:ring-2 focus-visible:ring-white/30"
             style={{ position: 'relative' }}
@@ -275,7 +281,7 @@ export default function Chat({ roomId, username }) {
           rows={1}
           maxLength={500}
           aria-label="Chat message"
-          className="flex-1 bg-bg-surface border border-border rounded-xl
+          className="flex-1 bg-bg-surface border border-border rounded-none
                      px-3 py-2 text-xs sm:text-sm text-white placeholder-text-dim
                      focus:outline-none focus:border-red-brand focus:shadow-input-focus
                      hover:border-border-bright
@@ -290,7 +296,7 @@ export default function Chat({ roomId, username }) {
           whileTap={{ scale: 0.92 }}
           whileHover={{ scale: 1.06 }}
           transition={{ duration: 0.12 }}
-          className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-red-brand hover:bg-red-hover
+          className="w-9 h-9 sm:w-10 sm:h-10 rounded-none bg-red-brand hover:bg-red-hover
                      flex items-center justify-center text-white
                      disabled:opacity-30 disabled:cursor-not-allowed
                      transition-colors duration-200 flex-shrink-0

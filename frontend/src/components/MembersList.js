@@ -40,7 +40,7 @@ export default function MembersList({ users, streamerId, currentUserId, onKick }
                         return (
                             <div
                                 key={user.id}
-                                className="flex items-center justify-between p-2 rounded-xl bg-bg-surface/40 hover:bg-bg-surface transition-colors group"
+                                className="flex items-center justify-between p-2 rounded-none bg-bg-surface/40 hover:bg-bg-surface transition-colors group"
                             >
                                 <div className="flex items-center gap-3 overflow-hidden">
                                     <div className="relative flex-shrink-0">
@@ -59,14 +59,14 @@ export default function MembersList({ users, streamerId, currentUserId, onKick }
 
                                 <div className="flex items-center gap-2 flex-shrink-0 ml-2">
                                     {isStreamer ? (
-                                        <span className="text-[9px] px-1.5 py-0.5 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 rounded font-bold uppercase tracking-widest">
+                                        <span className="text-[9px] px-1.5 py-0.5 bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 rounded-none font-bold uppercase tracking-widest">
                                             Host
                                         </span>
                                     ) : (
                                         amIHost && (
                                             <button
                                                 onClick={() => onKick(user.id, user.username)}
-                                                className="p-1.5 sm:p-2 rounded-lg bg-red-brand/10 text-red-brand/60 hover:text-red-brand hover:bg-red-brand/20 
+                                                className="p-1.5 sm:p-2 rounded-none bg-red-brand/10 text-red-brand/60 hover:text-red-brand hover:bg-red-brand/20
                                                            border border-transparent hover:border-red-brand/30 transition-all opacity-0 group-hover:opacity-100"
                                                 title="Remove from room"
                                             >
