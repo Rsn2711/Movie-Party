@@ -584,9 +584,9 @@ const HOW_STEPS = [
 
 function HowItWorks() {
   return (
-    <section className="py-16 sm:py-20 border-t border-border bg-bg-deep" aria-labelledby="how-heading">
+    <section className="py-10 sm:py-14 border-t border-border bg-bg-deep" aria-labelledby="how-heading">
       <div className="container-content">
-        <div className="text-center mb-12">
+        <div className="text-center mb-8 sm:mb-10">
           <motion.div
             initial={{ opacity: 0, y: 16 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -740,7 +740,7 @@ export default function Home() {
           HERO SECTION
       ═══════════════════════════════════════════════════════════ */}
       <section
-        className="relative flex items-end pt-24 sm:pt-24 pb-12 sm:pb-24 min-h-[100dvh]"
+        className="relative flex items-end pt-16 sm:pt-16 pb-8 sm:pb-16 min-h-[100dvh]"
         aria-label="Hero section"
       >
         <HeroVideoBackground />
@@ -791,11 +791,8 @@ export default function Home() {
 
               {/* Description */}
               <p className="w-full max-w-[700px] text-text-muted text-sm leading-relaxed text-center sm:text-left">
-                Enjoy movies and shows together from anywhere in the world. Create a
-                private watch party, invite your friends instantly, and experience
-                synchronized playback with real-time chat. No countdowns, no
-                buffering confusion—just smooth streaming and unforgettable moments
-                shared together.
+                Watch movies and shows together in real time, no matter the distance.
+                Create a room, invite friends, and enjoy synced playback with live chat.
               </p>
 
 
@@ -842,12 +839,12 @@ export default function Home() {
           FEATURES + CARDS SECTION
       ═══════════════════════════════════════════════════════════ */}
       <section
-        className="py-16 sm:py-20 border-t border-border"
+        className="py-10 sm:py-14 border-t border-border"
         aria-labelledby="features-heading"
       >
         <div className="container-content">
           {/* Section header */}
-          <div className="text-center mb-10 sm:mb-12">
+          <div className="text-center mb-6 sm:mb-8">
             <motion.div
               initial={{ opacity: 0, y: 16 }}
               whileInView={{ opacity: 1, y: 0 }}

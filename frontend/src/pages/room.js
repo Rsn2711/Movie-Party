@@ -70,12 +70,12 @@ function JoinModal({ roomId, onJoin, onBack }) {
         <div className="flex flex-col items-start text-left gap-4">
           {/* Room badge */}
           <div
-            className="inline-flex items-center gap-2.5 bg-red-muted border border-red-brand/30
-                       text-red-brand text-sm font-bold tracking-widest uppercase
-                       px-4 py-2"
+            className="inline-flex items-center gap-2 bg-bg-surface/80 border border-border
+                       rounded-full pl-3 pr-4 py-1.5"
           >
-            <span className="w-2 h-2 rounded-full bg-red-brand animate-pulse" aria-hidden="true" />
-            Room {roomId}
+            <span className="w-1.5 h-1.5 rounded-full bg-red-brand animate-pulse shrink-0" aria-hidden="true" />
+            <span className="text-text-muted text-xs font-semibold uppercase tracking-widest">Room</span>
+            <span className="text-white text-xs font-bold tracking-[0.1em]">{roomId}</span>
           </div>
 
           <div>
